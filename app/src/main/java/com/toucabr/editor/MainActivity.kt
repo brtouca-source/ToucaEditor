@@ -12,6 +12,13 @@ import android.provider.MediaStore
 import android.webkit.*
 import android.view.WindowManager
 import androidx.webkit.WebViewAssetLoader
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+import androidx.webkit.WebMessageCompat
+import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.channels.FileChannel
 import org.json.JSONObject
 import org.json.JSONArray
 import java.io.File
@@ -26,7 +33,17 @@ class MainActivity : Activity() {
     private lateinit var root: File
     private var picker: ((Array<Uri>?) -> Unit)? = null
     private var permission: PermissionRequest? = null
-    private val exports = mutableMapOf<String, Pair<File, String>>()
+    private data class ExportJob(
+        val uri: Uri,
+        val pfd: android.os.ParcelFileDescriptor,
+        val stream: FileOutputStream,
+        val channel: FileChannel,
+        val token: Int,
+        var size: Long = 0L
+    )
+    private val exports = mutableMapOf<String, ExportJob>()
+    private val exportTokens = mutableMapOf<Int, String>()
+    private var nextExportToken = 1
     private val origin = "https://appassets.androidplatform.net"
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -77,9 +94,120 @@ class MainActivity : Activity() {
             override fun onJsPrompt(v:WebView,u:String,m:String,d:String?,r:JsPromptResult):Boolean {val input=android.widget.EditText(this@MainActivity);input.setText(d);android.app.AlertDialog.Builder(this@MainActivity).setMessage(m).setView(input).setPositiveButton("Salvar"){_,_->r.confirm(input.text.toString())}.setNegativeButton("Cancelar"){_,_->r.cancel()}.setOnCancelListener{r.cancel()}.show();return true}
         }
         web.addJavascriptInterface(Bridge(),"toucaAndroid")
+        installBinaryExportBridge()
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
         setContentView(web);web.loadUrl("$origin/assets/touca-app/index.html")
     }
+    private fun binaryExportSupported(): Boolean =
+        WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) &&
+        WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_ARRAY_BUFFER)
+
+    private fun installBinaryExportBridge() {
+        if (!binaryExportSupported()) return
+        WebViewCompat.addWebMessageListener(
+            web,
+            "toucaBinary",
+            setOf(origin),
+            WebViewCompat.WebMessageListener { _, message, sourceOrigin, isMainFrame, replyProxy ->
+                fun reply(value: String) = runOnUiThread { replyProxy.postMessage(value) }
+                if (!isMainFrame || sourceOrigin.toString().trimEnd('/') != origin) {
+                    reply("error:origem inválida")
+                    return@WebMessageListener
+                }
+                if (message.type != WebMessageCompat.TYPE_ARRAY_BUFFER) {
+                    reply("error:mensagem binária esperada")
+                    return@WebMessageListener
+                }
+                val packet = message.arrayBuffer
+                if (packet.size < 16) {
+                    reply("error:pacote incompleto")
+                    return@WebMessageListener
+                }
+                val header = ByteBuffer.wrap(packet, 0, 16).order(ByteOrder.LITTLE_ENDIAN)
+                val magic = header.int
+                val token = header.int
+                val position = header.long
+                if (magic != 0x544f5543 || position < 0) {
+                    reply("error:cabeçalho inválido")
+                    return@WebMessageListener
+                }
+                val payload = packet.copyOfRange(16, packet.size)
+                if (payload.size > 4 * 1024 * 1024) {
+                    reply("error:bloco grande demais")
+                    return@WebMessageListener
+                }
+                io.execute {
+                    try {
+                        val jobId = exportTokens[token] ?: error("Exportação encerrada")
+                        val job = exports[jobId] ?: error("Exportação encerrada")
+                        job.channel.position(position)
+                        val data = ByteBuffer.wrap(payload)
+                        while (data.hasRemaining()) job.channel.write(data)
+                        job.size = maxOf(job.size, position + payload.size)
+                        reply("ok")
+                    } catch (e: Exception) {
+                        reply("error:" + (e.message ?: "falha ao gravar"))
+                    }
+                }
+            }
+        )
+    }
+
+    private fun newExportJob(name: String, mime: String): Pair<String, ExportJob> {
+        val clean = name.replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { "Touca" }
+        val ext = if (mime.contains("webm", true)) ".webm" else ".mp4"
+        val display = if (clean.endsWith(ext, true)) clean else clean + ext
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, display)
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Movies/ToucaEditor")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+            ?: error("Falha ao criar arquivo de exportação")
+        try {
+            val pfd = contentResolver.openFileDescriptor(uri, "rw")
+                ?: error("Falha ao abrir arquivo de exportação")
+            val stream = FileOutputStream(pfd.fileDescriptor)
+            val token = nextExportToken++
+            val job = ExportJob(uri, pfd, stream, stream.channel, token)
+            val id = UUID.randomUUID().toString()
+            exports[id] = job
+            exportTokens[token] = id
+            return id to job
+        } catch (e: Exception) {
+            contentResolver.delete(uri, null, null)
+            throw e
+        }
+    }
+
+    private fun finishExportJob(id: String): JSONObject {
+        val job = exports.remove(id) ?: error("Exportação encerrada")
+        exportTokens.remove(job.token)
+        try {
+            job.channel.force(true)
+            job.channel.close()
+            job.stream.close()
+            job.pfd.close()
+            val values = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+            contentResolver.update(job.uri, values, null, null)
+            return JSONObject().put("filePath", job.uri.toString()).put("size", job.size)
+        } catch (e: Exception) {
+            contentResolver.delete(job.uri, null, null)
+            throw e
+        }
+    }
+
+    private fun cancelExportJob(id: String): Boolean {
+        val job = exports.remove(id) ?: return true
+        exportTokens.remove(job.token)
+        try { job.channel.close() } catch (_: Exception) {}
+        try { job.stream.close() } catch (_: Exception) {}
+        try { job.pfd.close() } catch (_: Exception) {}
+        contentResolver.delete(job.uri, null, null)
+        return true
+    }
+
     private fun grantCapture(){val r=permission?:return; permission=null; val allowed=r.resources.filter{when(it){PermissionRequest.RESOURCE_AUDIO_CAPTURE->checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED;PermissionRequest.RESOURCE_VIDEO_CAPTURE->checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED;else->false}};if(allowed.isEmpty())r.deny() else r.grant(allowed.toTypedArray())}
     override fun onRequestPermissionsResult(c:Int,p:Array<out String>,g:IntArray){super.onRequestPermissionsResult(c,p,g);if(c==32)grantCapture()}
     private fun choose(types:Array<String>,multi:Boolean,cb:(Array<Uri>?)->Unit){
@@ -91,7 +219,14 @@ class MainActivity : Activity() {
     private fun dir(id:String)=File(root,token(id)).apply{mkdirs()}
     private fun asset(p:String,id:String)=File(File(dir(p),"assets").apply{mkdirs()},token(id))
     private fun url(p:String,id:String)="$origin/media/${token(p)}/${token(id)}"
-    private fun atomic(f:File,s:String){val tmp=File(f.path+".tmp");tmp.writeText(s);check(tmp.renameTo(f)){"Não foi possível salvar"}}
+    private fun atomic(f:File,s:String){
+        val tmp=File(f.path+".tmp"); tmp.writeText(s)
+        try {
+            java.nio.file.Files.move(tmp.toPath(),f.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+        } catch (_: Exception) {
+            java.nio.file.Files.move(tmp.toPath(),f.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
     private fun resolve(id:String,value:Any?=null,error:String?=null){val result=JSONObject().put("value",value?:JSONObject.NULL).put("error",error?:JSONObject.NULL);runOnUiThread{web.evaluateJavascript("window.__toucaReply(${JSONObject.quote(id)},$result)",null)}}
     private fun publish(f:File,name:String,mime:String,video:Boolean):String {
         val values=ContentValues().apply{put(MediaStore.MediaColumns.DISPLAY_NAME,name);put(MediaStore.MediaColumns.MIME_TYPE,mime);put(MediaStore.MediaColumns.RELATIVE_PATH,if(video)"Movies/ToucaEditor" else "Download/ToucaEditor");put(MediaStore.MediaColumns.IS_PENDING,1)}
@@ -100,7 +235,14 @@ class MainActivity : Activity() {
     }
     private fun importUri(p:String,u:Uri):JSONObject{
         var name="Mídia";contentResolver.query(u,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{if(it.moveToFirst())name=it.getString(0)}
-        val mime=contentResolver.getType(u)?:"application/octet-stream";val type=mime.substringBefore('/');require(type in listOf("image","video","audio")){"Formato não suportado: $name"}
+        var mime=contentResolver.getType(u)?:"application/octet-stream"
+        var type=mime.substringBefore('/')
+        if(type !in listOf("image","video","audio")){
+            val ext=name.substringAfterLast('.', "").lowercase()
+            type=when(ext){"png","jpg","jpeg","webp","gif","bmp"->"image";"mp4","m4v","mov","webm","mkv","avi"->"video";"mp3","wav","m4a","aac","ogg","opus","flac"->"audio";else->type}
+            if(mime=="application/octet-stream"&&type in listOf("image","video","audio"))mime="$type/*"
+        }
+        require(type in listOf("image","video","audio")){"Formato não suportado: $name"}
         val id=UUID.randomUUID().toString();val f=asset(p,id)
         try{contentResolver.openInputStream(u)!!.use{input->f.outputStream().use{input.copyTo(it)}}}catch(e:Exception){f.delete();throw e}
         val meta=JSONObject().put("mime",mime).put("name",name).put("type",type).put("bytes",f.length());atomic(File(f.path+".json"),meta.toString())
@@ -143,12 +285,12 @@ class MainActivity : Activity() {
             "storeAsset"->{val data=s(4);require(data.startsWith("data:")&&data.substringBefore(',').endsWith(";base64"));val f=asset(s(0),s(1));f.writeBytes(Base64.decode(data.substringAfter(','),Base64.DEFAULT));atomic(File(f.path+".json"),JSONObject().put("name",s(2)).put("type",s(3)).put("mime",data.substringAfter("data:").substringBefore(';')).toString());JSONObject().put("bytes",f.length()).put("url",url(s(0),s(1)))}
             "storeAssetThumb"->true
             "ensureProxy"->null
-            "hardwareInfo","nativeExportCapabilities"->JSONObject().put("available",false).put("engine","Android WebCodecs + MediaStore")
+            "hardwareInfo","nativeExportCapabilities"->JSONObject().put("available",false).put("engine","Android WebCodecs + MediaStore").put("binaryBridge",binaryExportSupported())
             "saveProjectAs"->{val f=File.createTempFile("project",".touca",cacheDir);try{f.writeText(s(1));publish(f,s(0).replace(Regex("[\\\\/:*?\"<>|]"),"_")+".touca","application/octet-stream",false)}finally{f.delete()}}
-            "fileExportStart"->{val name=a.getJSONObject(0).optString("name","Touca").replace(Regex("[\\\\/:*?\"<>|]"),"_")+".mp4";val id=UUID.randomUUID().toString();val f=File.createTempFile("export",".mp4",cacheDir);exports[id]=Pair(f,name);JSONObject().put("jobId",id)}
-            "fileExportWrite"->{val job=exports[s(0)]?:error("Exportação encerrada");RandomAccessFile(job.first,"rw").use{it.seek(a.getLong(1));it.write(Base64.decode(s(2),Base64.DEFAULT))};true}
-            "fileExportFinish"->{val job=exports[s(0)]?:error("Exportação encerrada");val size=job.first.length();require(size>0);val uri=publish(job.first,job.second,"video/mp4",true);exports.remove(s(0));job.first.delete();JSONObject().put("filePath",uri).put("size",size)}
-            "fileExportCancel"->{exports.remove(s(0))?.first?.delete();true}
+            "fileExportStart"->{val o=a.optJSONObject(0)?:JSONObject();val mime=o.optString("mime","video/mp4");val pair=newExportJob(o.optString("name","Touca"),mime);JSONObject().put("jobId",pair.first).put("binaryToken",pair.second.token).put("binary",binaryExportSupported())}
+            "fileExportWrite"->{val job=exports[s(0)]?:error("Exportação encerrada");val position=a.getLong(1);val data=Base64.decode(s(2),Base64.DEFAULT);require(position>=0&&data.size<=1024*1024){"Bloco de exportação inválido"};job.channel.position(position);val buffer=ByteBuffer.wrap(data);while(buffer.hasRemaining())job.channel.write(buffer);job.size=maxOf(job.size,position+data.size);true}
+            "fileExportFinish"->finishExportJob(s(0))
+            "fileExportCancel"->cancelExportJob(s(0))
             "setPresetSound"->{val f=File(filesDir,"preset-${token(s(0))}-${token(s(1))}.json");atomic(f,JSONObject().put("name",s(2)).put("dataUrl",s(3)).toString());true}
             "getPresetSound"->{val f=File(filesDir,"preset-${token(s(0))}-${token(s(1))}.json");if(f.exists())JSONObject(f.readText())else null}
             "clearPresetSound"->File(filesDir,"preset-${token(s(0))}-${token(s(1))}.json").delete()
@@ -156,5 +298,9 @@ class MainActivity : Activity() {
         }
     }
     override fun onBackPressed(){web.evaluateJavascript("window.__toucaBack ? window.__toucaBack() : false"){r->if(r!="true")android.app.AlertDialog.Builder(this).setMessage("Sair do editor?").setPositiveButton("Sair"){_,_->finish()}.setNegativeButton("Continuar",null).show()}}
-    override fun onDestroy(){picker?.invoke(null);permission?.deny();web.destroy();io.shutdown();super.onDestroy()}
+    override fun onDestroy(){
+        picker?.invoke(null); permission?.deny()
+        for(id in exports.keys.toList()) try { cancelExportJob(id) } catch (_: Exception) {}
+        web.destroy(); io.shutdown(); super.onDestroy()
+    }
 }
