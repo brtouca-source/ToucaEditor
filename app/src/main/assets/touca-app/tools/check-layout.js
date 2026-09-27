@@ -8,7 +8,10 @@ const scripts=[...html.matchAll(/<script\b[^>]*src="([^"]+)"/g)].map(m=>m[1]);
 if(scripts.indexOf('./renderer/timeline/geometry.js')>scripts.indexOf('./renderer/core/editor.js'))throw Error('Geometry must load before core');
 if(scripts.includes('./android/bridge.js')){
  if(scripts.indexOf('./android/bridge.js')>scripts.indexOf('./renderer/core/editor.js'))throw Error('Android bridge must precede core');
- if(scripts.at(-1)!=='./android/mobile.js'||scripts.at(-2)!=='./ui/desktop.js')throw Error('Android UI must follow desktop UI');
+ const runtime=scripts.includes('./android/runtime.js');
+ if(runtime){
+  if(scripts.at(-1)!=='./android/runtime.js'||scripts.at(-2)!=='./android/mobile.js'||scripts.at(-3)!=='./ui/desktop.js')throw Error('Android load order must be desktop UI -> mobile UI -> runtime');
+ }else if(scripts.at(-1)!=='./android/mobile.js'||scripts.at(-2)!=='./ui/desktop.js')throw Error('Android UI must follow desktop UI');
 }else if(scripts.at(-1)!=='./ui/desktop.js')throw Error('Desktop UI must load last');
 for(const file of walk(root)){
  if(file.endsWith('.js'))new vm.Script(fs.readFileSync(file,'utf8'),{filename:path.relative(root,file)});
