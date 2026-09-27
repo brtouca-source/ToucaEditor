@@ -84,7 +84,6 @@
    const zoom=$('timelineZoom');if(zoom)zoom.oninput=e=>{pps=Number(e.target.value);if(!zoomRaf)zoomRaf=requestAnimationFrame(()=>{zoomRaf=0;buildTimeline()})};
 
    // Do not replace beginGesture/moveGesture/endGesture: 31.6 already owns pinch, rotate, scale and keyframe gestures.
-   addEventListener('pagehide',()=>releaseUnusedMedia(new Set()),{once:true});
    setTimeout(()=>{resizePreview(true);buildTimeline();draw()},0);
  }
  Android.performance={install,onMemoryPressure,releaseUnusedMedia,get quality(){return previewLevels[previewIndex]},get levels(){return [...previewLevels]}};

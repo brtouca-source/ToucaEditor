@@ -59,8 +59,12 @@
    startRecord=async function(...args){
      if(exporting)return;
      const p=await probe();if(!p.can){const msg='Seu Android System WebView não oferece um encoder compatível. Atualize o WebView/Chrome e tente novamente.';$('exportStatus').textContent=msg;toast(msg);return}
-     try{if(p.mp4)return await compatibleExport(p.mp4);await saveBeforeExport();await native?.setKeepAwake?.(true);if(p.video&&p.audio)return await fastStart(...args);if(p.webm)return await compatibleExport(p.webm)}
-     catch(err){await native?.setKeepAwake?.(false);if(p.video&&p.audio&&p.mp4){toast('Modo compatível falhou; tentando o exportador WebCodecs.');return fastStart(...args)}$('exportStatus').textContent=err.message||String(err);toast('Falha ao exportar: '+$('exportStatus').textContent)}
+     const runFast=async()=>{await saveBeforeExport();await native?.setKeepAwake?.(true);try{return await fastStart(...args)}finally{await native?.setKeepAwake?.(false)}};
+     try{
+       if(p.mp4){try{return await compatibleExport(p.mp4)}catch(err){if(p.video&&p.audio){toast('Modo compatível falhou; tentando o exportador WebCodecs.');return await runFast()}throw err}}
+       if(p.video&&p.audio)return await runFast();
+       if(p.webm)return await compatibleExport(p.webm);
+     }catch(err){await native?.setKeepAwake?.(false);$('exportStatus').textContent=err.message||String(err);toast('Falha ao exportar: '+$('exportStatus').textContent)}
    };
    finishRecord=function(cancel=false){if(recorderState){recorderState.cancelled=!!cancel;pause();try{if(recorderState.rec.state!=='inactive')recorderState.rec.stop()}catch{}if(cancel)$('exportStatus').textContent='Cancelando e removendo o arquivo parcial…';return}const r=fastFinish(cancel);if(cancel)native?.setKeepAwake?.(false).catch(()=>{});return r};
    showExport=async function(){if(!P.clips.length||!total())return toast('Sua timeline está vazia.');$('exportDialog').showModal();$('startExport').disabled=true;$('exportInfo').textContent='Verificando codecs e armazenamento deste aparelho…';const p=await probe(),mode=p.mp4?'MP4 em streaming':p.video&&p.audio?'MP4 por WebCodecs':p.webm?'WebM em streaming':'sem encoder compatível';$('exportInfo').textContent=`${fmt(total())} · ${mode} · gravação direta em Filmes/ToucaEditor${p.binaryBridge?' · ponte binária ativa':''}.`;$('startExport').disabled=!p.can};
