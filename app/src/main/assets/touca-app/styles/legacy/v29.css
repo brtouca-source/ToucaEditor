@@ -1,0 +1,5 @@
+/* Scoped refinements. Media canvas color is intentionally untouched. */
+.clip .clipKey{background:#fff!important;border:1.5px solid #121820!important;box-shadow:0 2px 5px #0004!important}
+.clip.v19DropTarget::after{content:'';position:absolute;inset:0;z-index:30;pointer-events:none;border:2px solid #97e8ff;border-radius:inherit;background:#73dafa77;box-shadow:0 0 16px #66d9ff55}
+#aniDrag.isDragging{opacity:1!important;transform:scale(.94)!important;box-shadow:0 0 0 4px #8de6ff55!important}
+#aniDrag{touch-action:none!important;visibility:visible!important}

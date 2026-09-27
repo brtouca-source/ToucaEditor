@@ -1,0 +1,53 @@
+/* Touca Editor v26 Release Candidate — interaction/performance layer */
+:root{--v26-cyan:#72e8f2;--v26-cyan-soft:#72e8f226;--v26-orange:#ff9b52}
+html[data-touca-v26="true"] .v19Card,
+html[data-touca-v26="true"] .v18ProjectCard,
+html[data-touca-v26="true"] .clip,
+html[data-touca-v26="true"] .v19PanelBody button{transition:transform .16s cubic-bezier(.2,.8,.2,1),border-color .16s,background-color .16s,box-shadow .16s,opacity .14s}
+html[data-touca-v26="true"] .v19Card:hover{transform:translateY(-2px);box-shadow:0 7px 18px #00151b36}
+html[data-touca-v26="true"] #v19Library:not(.v19Hidden),
+html[data-touca-v26="true"] #v19Inspector:not(.v19Hidden){animation:v26PanelIn .2s cubic-bezier(.2,.9,.3,1)}
+@keyframes v26PanelIn{from{opacity:.35;transform:translateY(8px) scale(.993)}to{opacity:1;transform:none}}
+
+/* One robust drag visual. Never inherits .clip positioning rules. */
+.v26DragGhost{position:fixed!important;left:0!important;top:0!important;margin:0!important;z-index:100000!important;pointer-events:none!important;overflow:hidden!important;border:2px solid var(--v26-cyan)!important;border-radius:9px!important;background:#173c46e8!important;box-shadow:0 12px 32px #00151c7a,0 0 0 1px #ffffff52 inset!important;color:#efffff!important;opacity:.94!important;transform:translate3d(var(--v26-x,0px),var(--v26-y,0px),0)!important;will-change:transform!important;contain:layout paint style!important}
+.v26DragGhost .v21TrimZone,.v26DragGhost .clipKey,.v26DragGhost .edgeKey,.v26DragGhost .transitionMark,.v26DragGhost .handle{display:none!important}
+.clip.v26SourceDragging{opacity:.44!important;outline:2px solid var(--v26-cyan)!important;outline-offset:-1px!important;filter:saturate(.86)}
+.track.v26DropTarget{background-color:var(--v26-cyan-soft)!important;box-shadow:inset 0 0 0 2px #72e8f2aa!important}
+.timeline.v26InvalidDrop{box-shadow:inset 0 0 0 1px #ff7373aa!important}
+.clip.v26ResizePreview{outline:1px solid #ffaf6f!important;box-shadow:0 0 0 2px #ff9b5235 inset!important}
+
+/* Make trim hit boxes easy to grab without visual old handles. */
+.clip .v21TrimZone{position:absolute!important;top:0!important;bottom:0!important;width:12px!important;z-index:30!important;background:transparent!important;cursor:ew-resize!important;touch-action:none!important}
+.clip .v21TrimZone.left{left:-2px!important}.clip .v21TrimZone.right{right:-2px!important}
+.clip:hover .v21TrimZone:after,.clip.v26ResizePreview .v21TrimZone:after{content:'';position:absolute;top:5px;bottom:5px;width:2px;border-radius:2px;background:#ff9b52cc;opacity:.72}
+.clip .v21TrimZone.left:after{left:3px}.clip .v21TrimZone.right:after{right:3px}
+
+/* Definitive ANI / TRAN duration controller. */
+.v26DurationControl{display:grid;grid-template-columns:auto minmax(68px,1fr) auto;align-items:center;gap:7px;margin:8px 7px 6px;padding:7px 8px;border-radius:10px;background:#0e2b34;border:1px solid #6ee6ed61;cursor:default!important}
+.v26DurationControl span{font-size:10px;font-weight:800;color:#d6fbff}.v26DurationControl output{font:700 10px/1 ui-monospace,monospace;color:#ffd0a9;min-width:38px;text-align:right}
+.v26DurationControl input{width:100%!important;min-width:64px!important;accent-color:var(--v26-orange)!important;cursor:ew-resize!important}
+.v19Card.v26SelectedResource{border-color:var(--v26-orange)!important;box-shadow:0 0 0 1px #ff9b5269,0 8px 22px #00151a3b!important;background:linear-gradient(180deg,#31515b,#253f48)!important}
+.v19Card.v26SelectedResource .v19Preview{background:#69e9f31c!important}
+
+/* Preview quality stays compact and native-looking. */
+.v26PreviewQuality{display:flex;align-items:center;gap:6px;padding:2px 7px;border:1px solid #ffffff1d;border-radius:10px;background:#1c343a73;backdrop-filter:blur(8px);font-size:11px;color:#d5e8ea}
+.v26PreviewQuality select{height:26px;padding:2px 24px 2px 7px;font-size:11px;background:#14262c;border-color:#ffffff1e}
+
+/* Native audio inspector / denoise dialog. */
+.v26AudioGrid{display:grid;gap:12px}.v26AudioRow{display:grid;grid-template-columns:82px 1fr 48px;gap:8px;align-items:center}.v26AudioRow output{text-align:right;font:11px ui-monospace,monospace;color:#c9e8eb}.v26Toggle{display:flex;align-items:center;gap:8px;padding:9px 0}.v26AudioFx{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.v26AudioFx button{padding:9px 5px;font-size:11px}.v26AudioFx button.active{border-color:#ff9b52;background:#ff9b5220}.v26NativeBadge{padding:8px 10px;border-radius:10px;background:#67e6ef12;border:1px solid #67e6ef2c;color:#bdeef2;font-size:11px}
+.v26CleanDialog{width:min(480px,92vw)}.v26CleanDialog .v26Strength{display:grid;grid-template-columns:70px 1fr 44px;align-items:center;gap:8px;margin:17px 0}.v26CleanDialog progress{height:8px}
+
+/* Home: duplicate action without visual clutter. */
+.v26DuplicateProject{min-width:42px!important;padding-inline:10px!important}.v18ProjectActions{flex-wrap:wrap}
+
+/* Slight invisible breathing room between bars: layout only, no time gap. */
+.track{padding-block:1px!important}.clip{top:3px!important;height:36px!important}
+
+/* Better animated-card previews; the canvases stay unique. */
+.v23LoopPreview{width:100%!important;height:100%!important;display:block!important;border-radius:7px}.v26PreviewPaused{opacity:.72}
+
+/* Performance badges */
+#v26PerfBadge{font-size:10px;color:#b6dfe4;border:1px solid #ffffff18;background:#1c343b;padding:4px 7px;border-radius:8px;white-space:nowrap}
+
+@media (max-width:760px){.v26AudioFx{grid-template-columns:repeat(2,minmax(0,1fr))}.v26DurationControl{grid-template-columns:auto 1fr}.v26DurationControl output{grid-column:2;justify-self:end}.v26PreviewQuality{display:none}}

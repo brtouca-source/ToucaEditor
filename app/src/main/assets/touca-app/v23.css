@@ -1,0 +1,24 @@
+/* Touca Editor v23 — timeline/pyramid, selected resources and fluid drag */
+html[data-touca-v23="true"] .v20DurationBar{display:none!important}
+html[data-touca-v23="true"] #v19LibraryGrid .v19Card{position:relative;overflow:hidden;transition:border-color .14s,background .14s,box-shadow .14s,transform .12s}
+html[data-touca-v23="true"] #v19LibraryGrid .v19Card.v23ResourceSelected{border-color:#ff9b4e!important;background:linear-gradient(145deg,#51dceb35,#ff9a4520)!important;box-shadow:inset 0 0 0 1px #ff9b4e,0 0 0 2px #78e9f238!important}
+html[data-touca-v23="true"] .v19Preview.animation,html[data-touca-v23="true"] .v19Preview.transition{height:68px!important;padding:0!important;background:#102129!important;overflow:hidden!important}
+.v23LoopPreview{width:100%;height:100%;display:block}
+.v23CardDuration{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px;margin:7px -2px -2px;padding:6px 7px;border-radius:9px;background:#07161d99;border:1px solid #86eaf055;font-size:9px;color:#d9f7f9}.v23CardDuration input{width:100%;min-width:60px}.v23CardDuration output{font:800 9px ui-monospace,monospace;color:#ffc18d}
+.v23SoundMenu{position:fixed;z-index:9300;width:225px;padding:9px;border-radius:15px;background:linear-gradient(150deg,#30454d,#1b2a30);border:1px solid #89a5af80;box-shadow:0 18px 44px #061116aa;color:#f4fafb;display:grid;gap:6px}.v23SoundMenu b{font-size:12px}.v23SoundMenu small{color:#b9ced2}.v23SoundMenu button{min-height:38px;border-radius:10px;background:#ffffff0b;color:#f6fbfc;border:1px solid #ffffff1b}.v23SoundMenu button:hover{border-color:#ffad6f88;background:#ff9b4c20}
+.v23Hint{padding:9px 10px;margin-bottom:10px;border-radius:11px;background:#67ddeb16;border:1px solid #8cebf13b;color:#d5eef1;font-size:11px;line-height:1.4}
+.v23LayerThumb{height:62px;border-radius:10px;display:grid;place-items:center;overflow:hidden;background:#0e2027;color:#c9edf0;font-size:24px;border:1px solid #ffffff18}.v23LayerThumb img{width:100%;height:100%;object-fit:cover}.v23LayerThumb.v23Global{background:radial-gradient(circle at 50% 40%,#ff9d5248,#11242c 65%)}
+/* clips keep a tiny visual gap without changing time */
+html[data-touca-v23="true"] .track{padding-top:1px!important;padding-bottom:1px!important;box-sizing:border-box!important}
+html[data-touca-v23="true"] .clip{top:2px!important;height:calc(100% - 4px)!important;box-sizing:border-box!important}
+/* all content keeps the source visible while dragging; target receives cyan glass */
+html[data-touca-v23="true"] .v21SourceDragging{opacity:.5!important;filter:none!important;box-shadow:inset 0 0 0 2px #77e9f2cc!important;background-color:#64e9f129!important}
+html[data-touca-v23="true"] .v21DragGhost{opacity:.86!important;box-shadow:0 13px 30px #06121888,0 0 0 2px #8cf1f7!important;background-color:#54e6ef35!important;backdrop-filter:blur(2px)}
+html[data-touca-v23="true"] body.v21Dragging .track.v19TrackTarget{background:linear-gradient(90deg,#56e6f326,#74ecf53b)!important;box-shadow:inset 0 0 0 2px #8df4f9dd!important}
+/* pyramid labels: first row is Layer 1, later rows render above it */
+html[data-touca-v23="true"] .trackHead[data-track-head="main"]{font-weight:900!important;color:#fff!important}
+html[data-touca-v23="true"] .trackHead[data-track-head^="overlay"]{color:#e8f8da!important}
+html[data-touca-v23="true"] .trackHead[data-track-head^="audio"],html[data-touca-v23="true"] .trackHead[data-track-head="voice"],html[data-touca-v23="true"] .trackHead[data-track-head="music"]{color:#c9f1dc!important}
+/* trim hit zones for subtitles/text/effects/audio too */
+html[data-touca-v23="true"] .clip .v21TrimZone{width:13px!important}
+@media(max-width:780px){.v23CardDuration{grid-template-columns:1fr}.v23CardDuration output{text-align:right}.v23SoundMenu{width:min(225px,calc(100vw - 20px))}}

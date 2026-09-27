@@ -1,0 +1,7 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),{events}=require('../project/event-sounds');
+function fixture(){return {assets:[{id:'s',duration:.4}],clips:[{id:'a',type:'image',track:'main',start:0,duration:2,animationIn:{name:'pop',duration:.4,soundAsset:'s'},animationOut:{name:'pop',duration:.4,soundAsset:'s'}},{id:'b',type:'image',track:'main',start:2,duration:2,transition:{type:'left',duration:.4,soundAsset:'s',from:'a'},animationIn:{name:'pop',duration:.4,soundAsset:'s'}}]};}
+test('transition owns boundary sound; entrance and exit do not double it',()=>{const p=fixture(),e=events(p);assert.deepEqual(e.map(x=>x.key),['a:in','b:transition']);assert.equal(e[1].start,1.8);assert.equal(e[1].volume,60);});
+test('sounds follow moved cuts; orphan/removed transitions disappear',()=>{const p=fixture();p.clips.forEach(c=>c.start+=4);assert.equal(events(p)[1].start,5.8);p.clips[1].transition=null;assert.equal(events(p).length,3);p.clips.splice(0,1);assert.deepEqual(events(p).map(x=>x.key),['b:in']);});
+test('disabled animation keeps configuration but is silent; short source is bounded',()=>{const p=fixture();p.clips[0].animationIn.enabled=false;p.assets[0].duration=.12;const e=events(p);assert.equal(e.length,1);assert.equal(e[0].duration,.12);assert.equal(p.clips[0].animationIn.name,'pop');});
+test('a disconnected or replaced preceding clip cannot play stale transition sound',()=>{const p=fixture();p.clips[0].id='new';assert(!events(p).some(e=>e.side==='transition'));});

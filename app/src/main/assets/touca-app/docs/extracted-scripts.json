@@ -1,0 +1,22 @@
+[
+  {
+    "path": "renderer/core/editor.js",
+    "bytes": 258102,
+    "sourceTag": 11
+  },
+  {
+    "path": "renderer/camera/mobile-v13.js",
+    "bytes": 14227,
+    "sourceTag": 12
+  },
+  {
+    "path": "renderer/camera/mobile-v14.js",
+    "bytes": 5800,
+    "sourceTag": 13
+  },
+  {
+    "path": "renderer/desktop/native-behavior.js",
+    "bytes": 641,
+    "sourceTag": 14
+  }
+]

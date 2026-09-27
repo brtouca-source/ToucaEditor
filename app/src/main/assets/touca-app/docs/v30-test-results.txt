@@ -1,0 +1,28 @@
+✔ audio positions are sample accurate; gain is never normalized by track count (1.765541ms)
+✔ silent and muted tracks omitted; contiguous cuts keep continuity (0.280713ms)
+✔ FFmpeg: continuous cut has no sample gap and a finishing track does not pump volume (237.356591ms)
+✔ script alignment preserves names/punctuation and monotonic timing (1.892673ms)
+✔ long narration aligns within a bounded band (12669.759614ms)
+✔ sequential decoding never flushes between dependent H.264 frames and releases source cache (15.072248ms)
+✔ native MP4 export: 14 seconds, 420 complete frames, AAC, faststart, safe cancellation (1496.608379ms)
+✔ actual import IPC writes assets, saves edits and reopens in a fresh backend (88.86402ms)
+✔ failed package transaction leaves no empty published project (4.224407ms)
+✔ both default diamonds can be removed without losing the static transform (3.291231ms)
+✔ animation in/out survive project JSON and replace independently (0.947999ms)
+✔ first animation can be assigned through the existing UI adapter (1.542274ms)
+✔ ZIP import streams assets with CRC and rejects traversal or corrupted data (75.454274ms)
+✔ semantic decisions compile to editable media, sound, words and exact key times (2.553679ms)
+✔ portable input rejects missing media, traversal, unsupported versions and overlap (1.10117ms)
+✔ small scale allowed; imported IDs and numeric transforms survive JSON serialization (0.497169ms)
+✔ save waits for media storage and keeps the captured project identity (4.745212ms)
+✔ failed media write must not save a project with stripped/missing media (2.535522ms)
+✔ export keeps distinct frames for repeated media and decodes moving transition sides (4.04752ms)
+✔ real wheel handler scales both ways around cursor and no longer snaps back to fill (833.656024ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12774.069004

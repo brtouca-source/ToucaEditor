@@ -1,0 +1,35 @@
+/* Touca Editor v25 — precise drag ghost + persistent ANI/TRAN duration */
+html[data-touca-v25="true"] .v21DragGhost.clip{
+  position:fixed!important;
+  top:var(--touca-v25-ghost-top,0px)!important;
+  left:var(--touca-v25-ghost-left,0px)!important;
+  height:var(--touca-ghost-h,40px)!important;
+  width:var(--touca-ghost-w,120px)!important;
+  min-height:0!important;
+  max-height:none!important;
+  margin:0!important;
+  transform:none!important;
+}
+html[data-touca-v25="true"] .v25DurationControl{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:6px;
+  margin:7px -2px -2px;
+  padding:6px 7px;
+  border-radius:9px;
+  background:#07161d99;
+  border:1px solid #86eaf055;
+  font-size:9px;
+  color:#d9f7f9;
+}
+html[data-touca-v25="true"] .v25DurationControl input{
+  width:100%;
+  min-width:60px;
+  accent-color:#ff9b4e;
+}
+html[data-touca-v25="true"] .v25DurationControl output{
+  font:800 9px ui-monospace,monospace;
+  color:#ffc18d;
+}

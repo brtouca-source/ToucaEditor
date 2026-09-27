@@ -1,0 +1,35 @@
+✔ audio positions are sample accurate; gain is never normalized by track count (1.04721ms)
+✔ silent and muted tracks omitted; contiguous cuts keep continuity (0.200242ms)
+✔ FFmpeg: continuous cut has no sample gap and a finishing track does not pump volume (238.289541ms)
+✔ script alignment preserves names/punctuation and monotonic timing (3.264173ms)
+✔ long narration aligns within a bounded band (10882.622792ms)
+✔ sequential decoding never flushes between dependent H.264 frames and releases source cache (22.369922ms)
+✔ native MP4 export: 14 seconds, 420 complete frames, AAC, faststart, safe cancellation (1540.720187ms)
+✔ actual import IPC writes assets, saves edits and reopens in a fresh backend (71.593232ms)
+✔ failed package transaction leaves no empty published project (4.372185ms)
+✔ opening and closing fresh drafts never publishes empty projects (1.934488ms)
+✔ text-only projects save; deleting all content of a saved project persists (10.366747ms)
+✔ both default diamonds can be removed without losing the static transform (4.662873ms)
+✔ animation in/out survive project JSON and replace independently (2.084835ms)
+✔ first animation can be assigned through the existing UI adapter (1.819324ms)
+✔ ZIP import streams assets with CRC and rejects traversal or corrupted data (108.802814ms)
+✔ semantic decisions compile to editable media, sound, words and exact key times (2.276204ms)
+✔ portable input rejects missing media, traversal, unsupported versions and overlap (1.002752ms)
+✔ small scale allowed; imported IDs and numeric transforms survive JSON serialization (0.459854ms)
+✔ save waits for media storage and keeps the captured project identity (2.18117ms)
+✔ failed media write must not save a project with stripped/missing media (1.289204ms)
+✔ export keeps distinct frames for repeated media and decodes moving transition sides (2.943901ms)
+✔ real wheel handler scales both ways around cursor and no longer snaps back to fill (3.362773ms)
+✔ visual spacing is 8px, while all clip timing stays contiguous (0.745865ms)
+✔ click without dragging preserves width/left without replacing the double-click target (1.841878ms)
+✔ right handle previews then commits; cancellation restores exact geometry (1.764291ms)
+✔ losing window focus cancels an unfinished trim and removes resize state (0.759766ms)
+✔ asynchronous timeline rebuild is deferred during active drag (0.869631ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11025.826298

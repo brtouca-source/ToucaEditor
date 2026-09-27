@@ -1,0 +1,7 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),{execFileSync}=require('node:child_process'),{openPackage}=require('../engine/project-package');
+test('ZIP import streams assets with CRC and rejects traversal or corrupted data',async()=>{const dir=await fs.mkdtemp(path.join(os.tmpdir(),'touca-zip-test-'));try{execFileSync('python3',['-c',`import zipfile,sys
+with zipfile.ZipFile(sys.argv[1],'w',zipfile.ZIP_DEFLATED) as z:
+ z.writestr('project.json','{"format":"touca-project"}')
+ z.writestr('media/page.png',b'a'*200000)
+with zipfile.ZipFile(sys.argv[2],'w') as z:z.writestr('../escape','bad')`,path.join(dir,'good.zip'),path.join(dir,'bad.zip')]);const pack=await openPackage(path.join(dir,'good.zip'));await pack.copy('media/page.png',path.join(dir,'out'));assert.equal((await fs.stat(path.join(dir,'out'))).size,200000);await assert.rejects(openPackage(path.join(dir,'bad.zip')));await assert.rejects(pack.copy('absent',path.join(dir,'absent')));const broken=await fs.readFile(path.join(dir,'good.zip'));const entry=pack.entries.get('media/page.png');broken[entry.start+3]^=255;await fs.writeFile(path.join(dir,'broken.zip'),broken);const p2=await openPackage(path.join(dir,'broken.zip'));await assert.rejects(p2.copy('media/page.png',path.join(dir,'broken')));}finally{await fs.rm(dir,{recursive:true,force:true});}});

@@ -1,0 +1,21 @@
+/* Touca Editor v24 — drag ghost fix + export controls */
+html[data-touca-v24="true"] .v21DragGhost.clip{
+  position:fixed!important;
+  height:var(--touca-ghost-h,40px)!important;
+  width:var(--touca-ghost-w,120px);
+  min-height:0!important;
+  max-height:none!important;
+  top:auto;
+  bottom:auto!important;
+  margin:0!important;
+  contain:layout paint style;
+}
+html[data-touca-v24="true"] .v21DragGhost .wave,
+html[data-touca-v24="true"] .v21DragGhost canvas,
+html[data-touca-v24="true"] .v21DragGhost img,
+html[data-touca-v24="true"] .v21DragGhost video{max-height:100%!important}
+html[data-touca-v24="true"] .v23CardDuration input[data-v24-duration="true"]{accent-color:#ff9b4e}
+html[data-touca-v24="true"] .v23CardDuration.v24Stable{box-shadow:inset 0 0 0 1px #6be8f22e}
+html[data-touca-v24="true"] #exportFps{font-weight:800}
+html[data-touca-v24="true"] .v24ExportEngine{display:flex;gap:7px;align-items:center;padding:8px 10px;border:1px solid #77e8ef44;border-radius:11px;background:#59dfe814;color:#dffbfc;font-size:11px}
+html[data-touca-v24="true"] .v24ExportEngine strong{color:#ffc18d}

@@ -1,0 +1,82 @@
+{
+  "format": "touca-project",
+  "version": 1,
+  "name": "Demonstração editável · 6 segundos",
+  "settings": {
+    "ratio": "9:16",
+    "fps": 30
+  },
+  "assets": [
+    {
+      "id": "page",
+      "type": "image",
+      "path": "media/panels.png",
+      "width": 1200,
+      "height": 1800,
+      "regions": {
+        "left": {
+          "x": 0.05,
+          "y": 0.05,
+          "width": 0.425,
+          "height": 0.9
+        },
+        "right": {
+          "x": 0.525,
+          "y": 0.05,
+          "width": 0.425,
+          "height": 0.9
+        }
+      }
+    },
+    {
+      "id": "voice",
+      "type": "audio",
+      "path": "audio/test.wav",
+      "duration": 6
+    }
+  ],
+  "scenes": [
+    {
+      "asset": "page",
+      "start": 0,
+      "end": 3,
+      "region": "left",
+      "motion": "slow_push",
+      "transition_out": "organic_fusion",
+      "reason": "Primeiro detalhe"
+    },
+    {
+      "asset": "page",
+      "start": 3,
+      "end": 6,
+      "region": "right",
+      "motion": "pull",
+      "reason": "Revelação do segundo painel"
+    },
+    {
+      "asset": "voice",
+      "start": 0,
+      "end": 6,
+      "volume": 35
+    },
+    {
+      "type": "subtitle",
+      "text": "DETALHE",
+      "start": 0,
+      "end": 3
+    },
+    {
+      "type": "subtitle",
+      "text": "REVELAÇÃO",
+      "start": 3,
+      "end": 6
+    }
+  ],
+  "logo": {
+    "text": "@TOUCABR",
+    "fontSize": 58
+  },
+  "metadata": {
+    "note": "Arte geométrica demonstrativa e tom de teste. Não é uma HQ analisada por IA."
+  }
+}

@@ -1,0 +1,8 @@
+.gradle/
+**/build/
+local.properties
+*.jks
+*.keystore
+*.apk
+app/src/main/assets/touca-app/resources/models/whisper-tiny/*.onnx
+app/src/main/assets/touca-app/resources/models/whisper-tiny/*.wasm

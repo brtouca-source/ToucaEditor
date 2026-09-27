@@ -1,0 +1,10 @@
+
+/* Touca v14 — surgical phone patch: true preview ratio, transport keyframes and timeline pinch zoom. */
+@media(max-width:600px) and (orientation:portrait){
+  /* Dimensions are set by fitPhonePreview() with inline !important values so the preview always
+     follows the selected project ratio instead of stretching to the phone workspace. */
+  .stageWrap .canvasBox{flex:none!important;align-self:center!important;justify-self:center!important;max-width:100%!important;max-height:100%!important;min-width:0!important;min-height:0!important}
+  .transport .mobileKeyBtn{border-radius:50%!important;background:linear-gradient(180deg,#526d78,#344b55)!important;border:1px solid #d8f6ff99!important;color:#fff!important;font-weight:900!important;font-size:15px!important;line-height:1!important;box-shadow:0 3px 0 #22343b,0 6px 12px #07171d40!important}
+  .transport .mobileKeyBtn:active{transform:scale(.92)!important}
+  .timelineScroll{touch-action:pan-x pan-y!important;overscroll-behavior:contain!important}
+}

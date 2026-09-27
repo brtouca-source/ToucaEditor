@@ -1,0 +1,16 @@
+'use strict';
+const fs=require('fs/promises'),path=require('path'),zlib=require('zlib');
+const {pipeline}=require('stream/promises'),{createReadStream,createWriteStream}=require('fs');
+const {Transform}=require('stream');const {safePath}=require('./project-compiler');
+const crcTable=Uint32Array.from({length:256},(_,n)=>{let c=n;for(let j=0;j<8;j++)c=(c>>>1)^((c&1)?0xedb88320:0);return c>>>0;});
+// Central-directory ZIP reader: one file at a time, no external dependencies.
+async function openPackage(file){
+ const h=await fs.open(file,'r'),stat=await h.stat();
+ try{const tail=Buffer.alloc(Math.min(stat.size,65557));await h.read(tail,0,tail.length,stat.size-tail.length);let at=-1;for(let i=tail.length-22;i>=0;i--)if(tail.readUInt32LE(i)===0x06054b50&&i+22+tail.readUInt16LE(i+20)===tail.length){at=i;break;}
+ if(at<0)throw Error('ZIP inválido');const count=tail.readUInt16LE(at+10),size=tail.readUInt32LE(at+12),offset=tail.readUInt32LE(at+16);if(tail.readUInt16LE(at+4)||tail.readUInt16LE(at+6)||count===65535||size>32e6||offset+size>stat.size||count>10000)throw Error('ZIP64/multipart ou pacote excessivo não suportado');const central=Buffer.alloc(size);await h.read(central,0,size,offset);const entries=new Map();let p=0,total=0;
+ for(let i=0;i<count;i++){if(p+46>size||central.readUInt32LE(p)!==0x02014b50)throw Error('Diretório ZIP inválido');const flags=central.readUInt16LE(p+8),method=central.readUInt16LE(p+10),crc=central.readUInt32LE(p+16),packed=central.readUInt32LE(p+20),bytes=central.readUInt32LE(p+24),n=central.readUInt16LE(p+28),extra=central.readUInt16LE(p+30),comment=central.readUInt16LE(p+32),local=central.readUInt32LE(p+42),name=central.subarray(p+46,p+46+n).toString('utf8');p+=46+n+extra+comment;if(flags&1||![0,8].includes(method))throw Error('ZIP criptografado/método não suportado');if(name.endsWith('/'))continue;safePath(name);if(entries.has(name))throw Error('Arquivo duplicado');total+=bytes;if(bytes>2e9||total>8e9)throw Error('Pacote excede limite de 8 GB');const head=Buffer.alloc(30);await h.read(head,0,30,local);if(head.readUInt32LE(0)!==0x04034b50)throw Error('Cabeçalho inválido');const start=local+30+head.readUInt16LE(26)+head.readUInt16LE(28);if(start+packed>offset)throw Error('Dados ZIP inválidos');entries.set(name,{start,packed,bytes,method,crc});}
+ const copy=async(name,dest)=>{const e=entries.get(safePath(name));if(!e)throw Error('Mídia ausente no ZIP: '+name);let read=0,crc=0xffffffff;const verify=new Transform({transform(chunk,_,cb){read+=chunk.length;if(read>e.bytes)return cb(Error('ZIP excedeu tamanho declarado'));for(const b of chunk){crc=(crc>>>8)^crcTable[(crc^b)&255];}cb(null,chunk);},flush(cb){cb(read===e.bytes&&((crc^0xffffffff)>>>0)===e.crc?null:Error('CRC/tamanho inválido: '+name));}});await fs.mkdir(path.dirname(dest),{recursive:true});if(!e.packed){if(e.bytes||e.crc)throw Error('ZIP vazio inválido');await fs.writeFile(dest,'');return;}const streams=[createReadStream(file,{start:e.start,end:e.start+e.packed-1})];if(e.method===8)streams.push(zlib.createInflateRaw());streams.push(verify,createWriteStream(dest,{flags:'wx'}));await pipeline(...streams);};
+ return {entries,copy};
+ }finally{await h.close();}
+}
+module.exports={openPackage};

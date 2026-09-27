@@ -1,0 +1,8 @@
+/* Touca Editor v27 — consolidation / definitive RC polish */
+:root[data-touca-v27="true"] .v27EngineBadge{
+  margin-top:8px;padding:8px 10px;border:1px solid rgba(122,231,239,.28);
+  border-radius:12px;background:rgba(75,215,225,.08);font-size:12px;color:rgba(238,250,252,.88);
+  backdrop-filter:blur(10px);transition:background .18s ease,border-color .18s ease,transform .18s ease;
+}
+:root[data-touca-v27="true"] .v27EngineBadge[data-ok="1"]{border-color:rgba(90,232,180,.35);background:rgba(90,232,180,.08)}
+:root[data-touca-v27="true"] .v27ProjectPath{display:block;margin-top:7px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.65}

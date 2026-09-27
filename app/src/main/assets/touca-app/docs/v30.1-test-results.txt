@@ -1,0 +1,48 @@
+✔ audio positions are sample accurate; gain is never normalized by track count (1.529857ms)
+✔ silent and muted tracks omitted; contiguous cuts keep continuity (0.313583ms)
+✔ FFmpeg: continuous cut has no sample gap and a finishing track does not pump volume (215.432883ms)
+✔ script alignment preserves names/punctuation and monotonic timing (2.617155ms)
+✔ long narration aligns within a bounded band (10405.340714ms)
+✔ sequential decoding never flushes between dependent H.264 frames and releases source cache (8.41181ms)
+✔ native MP4 export: 14 seconds, 420 complete frames, AAC, faststart, safe cancellation (1521.09647ms)
+✔ actual import IPC writes assets, saves edits and reopens in a fresh backend (75.00911ms)
+✔ failed package transaction leaves no empty published project (3.812728ms)
+✔ opening and closing fresh drafts never publishes empty projects (2.535012ms)
+✔ text-only projects save; deleting all content of a saved project persists (9.254641ms)
+✔ both default diamonds can be removed without losing the static transform (3.231772ms)
+✔ animation in/out survive project JSON and replace independently (1.92335ms)
+✔ first animation can be assigned through the existing UI adapter (0.986066ms)
+✔ ZIP import streams assets with CRC and rejects traversal or corrupted data (78.467369ms)
+✔ semantic decisions compile to editable media, sound, words and exact key times (2.451235ms)
+✔ portable input rejects missing media, traversal, unsupported versions and overlap (1.100378ms)
+✔ small scale allowed; imported IDs and numeric transforms survive JSON serialization (0.636699ms)
+✔ save waits for media storage and keeps the captured project identity (2.588843ms)
+✔ failed media write must not save a project with stripped/missing media (1.235513ms)
+✔ export keeps distinct frames for repeated media and decodes moving transition sides (3.798266ms)
+✔ real wheel handler scales both ways around cursor and no longer snaps back to fill (4.727977ms)
+✔ visual spacing is 8px, while all clip timing stays contiguous (0.808569ms)
+✔ click without dragging preserves width/left and refreshes selection (2.103191ms)
+✔ right handle previews then commits; cancellation restores exact geometry (2.011412ms)
+✔ losing window focus cancels an unfinished trim and removes resize state (0.746886ms)
+✔ asynchronous timeline rebuild is deferred during active drag (0.79004ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10515.190995
+✔ visual spacing is 8px, while all clip timing stays contiguous (0.708778ms)
+✔ click without dragging preserves width/left without replacing the double-click target (1.822597ms)
+✔ right handle previews then commits; cancellation restores exact geometry (1.720544ms)
+✔ losing window focus cancels an unfinished trim and removes resize state (0.747767ms)
+✔ asynchronous timeline rebuild is deferred during active drag (0.832154ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 83.737631

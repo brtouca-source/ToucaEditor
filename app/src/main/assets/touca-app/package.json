@@ -1,0 +1,14 @@
+{
+  "name": "touca-editor",
+  "productName": "Touca Editor",
+  "version": "31.6.0",
+  "description": "Touca Editor Next \u2014 desktop Windows",
+  "main": "main.js",
+  "author": "ToucaBR",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.js",
+    "check": "node tools/check-layout.js"
+  }
+}

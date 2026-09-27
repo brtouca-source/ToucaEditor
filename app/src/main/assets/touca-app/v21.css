@@ -1,0 +1,145 @@
+/* Touca Editor v19 — interaction cleanup + layered effects */
+:root{--v19-orange:#f69a4b;--v19-panel:#253940;--v19-panel2:#1d2d33;--v19-line:#78909866;--v19-cyan:#bfeef2;--v19-shadow:0 18px 50px #0b1c234d}
+html[data-touca-v19="true"] body{--v19-accent:var(--v19-orange)}
+/* preserve the user's current skin; only tighten contrast/interaction */
+#v18ContextBar{display:none!important}
+#selectMode,#deleteMany{display:none!important}
+#selectionCount:empty{display:none!important}
+#selectionCount{padding:0 7px;color:#eef9fa;font-weight:700}
+#transitionPicker,#aniDialog{display:none!important}
+#v18AdjustPanel,#v18TextPanel,#v18AudioFxPanel{display:none!important}
+
+/* TRAN / ANI / FX stay explicit instead of turning into mystery icons */
+#tranTool,#aniDrag,#effectDrag{font-weight:900!important;letter-spacing:.02em!important;min-width:62px!important;width:auto!important;padding:0 12px!important}
+#tranTool{border-radius:15px!important}
+#aniDrag{min-width:58px!important}
+#effectDrag{min-width:78px!important}
+
+/* clip trim zones are deliberately separate from the content body */
+.clip{overflow:visible!important}
+.clip .handle{width:12px!important;z-index:30!important;background:linear-gradient(90deg,#0000,#ffffff35,#0000)!important;border-radius:3px!important}
+.clip .handle.left{left:-1px!important;border-right:1px solid #081217aa!important}
+.clip .handle.right{right:-1px!important;border-left:1px solid #081217aa!important}
+.clip .handle:after{content:'';position:absolute;top:5px;bottom:5px;width:1px;background:#ffffff99}
+.clip .handle.left:after{right:-2px}.clip .handle.right:after{left:-2px}
+.clip.v19LayerDragging{opacity:.78;box-shadow:0 0 0 2px #fff,0 0 24px #6de6f3!important;cursor:grabbing!important}
+.track.v19TrackTarget{background:linear-gradient(90deg,#6de6f316,#6de6f326)!important;box-shadow:inset 0 0 0 2px #8df0f788!important}
+body.v19DraggingLayer .track.hiddenTrack,body.v19DraggingLayer .trackHead.hiddenTrack{display:flex!important}
+body.v19DraggingLayer .track{display:block!important}
+.trackHead[data-track-head^="overlay"] span{background:#b5df8b!important}.trackHead[data-track-head^="effects"] span{background:#a7e7f5!important}
+.trackHead[data-track-head^="overlay"]{color:#e9ffd7}.trackHead[data-track-head^="effects"]{color:#dffaff}
+
+/* keyframes only appear on visual media; larger and easier to hit */
+.clipKey{width:16px!important;height:16px!important;margin-left:-8px!important;bottom:3px!important;background:#fff!important;border:2px solid #050708!important;border-radius:2px!important;box-shadow:0 0 0 1px #ffffff99,0 3px 7px #0008!important;cursor:ew-resize!important;pointer-events:auto!important;z-index:35!important}
+.clipKey.v19KeySelected{background:#ffad67!important;box-shadow:0 0 0 2px #fff,0 0 14px #ff954c!important}
+.clipKey.v19KeyDragging{background:#80f1dc!important}
+.clip[data-v19-no-keys="true"] .clipKey,.clip[data-v19-no-keys="true"] .edgeKey{display:none!important}
+
+/* media thumbnails stay visible while labels remain readable */
+.clip.v18Thumb .clipLabel{background:#0b1318b8!important;backdrop-filter:blur(2px);border:1px solid #ffffff17}
+.clip.effects,.clip.effects2,.clip.effects3,.clip.effects4,.clip.effects5{background:linear-gradient(#daf7ff,#9eddea 46%,#72c8da 52%,#baf0f6)!important;color:#173e49!important;border-color:#e8fcff!important}
+.clip.effects .clipLabel,.clip.effects2 .clipLabel,.clip.effects3 .clipLabel,.clip.effects4 .clipLabel,.clip.effects5 .clipLabel{text-shadow:none!important;background:#ffffff8a!important;color:#163943!important}
+.clip.overlay2,.clip.overlay3,.clip.overlay4,.clip.overlay5{background:linear-gradient(#d8f5ad,#a6d47f 47%,#7eb85f 52%,#bee995)!important;color:#214b2a!important;border-color:#ecffd4!important}
+
+/* one reusable library + one inspector */
+#v19Library,#v19Inspector{position:fixed;z-index:2200;color:#f6fbfc;background:linear-gradient(150deg,rgba(43,62,69,.985),rgba(25,37,43,.99));border:1px solid #8aa4ae66;box-shadow:var(--v19-shadow);backdrop-filter:blur(24px) saturate(1.08);overflow:hidden}
+#v19Library{left:50%;top:50%;transform:translate(-50%,-50%);width:min(850px,calc(100vw - 34px));max-height:82vh;border-radius:25px}
+#v19Inspector{right:16px;top:84px;width:min(410px,calc(100vw - 30px));max-height:calc(100vh - 105px);border-radius:22px}
+.v19Hidden{display:none!important}.v19PanelHead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 17px;border-bottom:1px solid #ffffff18}.v19PanelHead h2{margin:0;font-size:18px}.v19PanelHead small{display:block;color:#b8cbd0;margin-top:2px}.v19PanelClose{width:38px;height:38px!important;min-width:38px!important;padding:0!important;border-radius:50%!important}.v19PanelBody{padding:15px;max-height:70vh;overflow:auto}.v19Tabs{display:flex;gap:7px;overflow:auto;padding:2px 1px 8px}.v19Tabs button{flex:0 0 auto;background:#ffffff0b!important;border-radius:13px!important}.v19Tabs button.active{background:linear-gradient(#ffb069,#f18d3e)!important;color:#2a1609!important;border-color:#ffcea8!important}.v19Grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(126px,1fr));gap:10px}.v19Card{position:relative;min-height:105px!important;padding:9px!important;border-radius:16px!important;text-align:left!important;background:linear-gradient(145deg,#354b54,#24363e)!important;border:1px solid #71889088!important;display:flex!important;flex-direction:column;gap:7px;justify-content:flex-end;touch-action:none;overflow:hidden}.v19Card:hover{border-color:#ffae70!important;transform:translateY(-1px);box-shadow:0 10px 24px #08131866}.v19Card b{font-size:12px;position:relative;z-index:3}.v19Card small{font-size:10px;color:#bfd0d4;position:relative;z-index:3}.v19Preview{height:50px;border-radius:11px;position:relative;overflow:hidden;background:linear-gradient(135deg,#7ba7b6,#263f49);display:grid;place-items:center;font-size:23px;font-weight:900;color:#fff;text-shadow:0 1px 4px #0008}.v19Preview:before,.v19Preview:after{content:'';position:absolute;inset:0;pointer-events:none}.v19Preview.transition:before{clip-path:polygon(0 0,48% 0,42% 100%,0 100%);background:#ff9953}.v19Preview.transition:after{clip-path:polygon(55% 0,100% 0,100% 100%,49% 100%);background:#6eaaf6}.v19Preview.effect{background:radial-gradient(circle at 30% 25%,#6fffe0,#668ef5 36%,#9454d9 64%,#1b2a31)}.v19Preview.animation{background:radial-gradient(circle,#ffd875 0 16%,transparent 18%),linear-gradient(145deg,#3c5660,#1b2b31)}.v19Preview.caption{font-size:14px;background:#101b20}.v19Card.isActive{box-shadow:0 0 0 2px #ff9c54 inset}.v19DropGhost{position:fixed;z-index:6000;pointer-events:none;min-width:120px;max-width:190px;padding:10px 13px;border-radius:15px;background:linear-gradient(#ffb168,#ee8738);color:#2a160c;font-weight:900;text-align:center;box-shadow:0 15px 34px #0009;transform:translate(-50%,-50%)}
+
+/* inspector controls */
+.v19Section{padding:11px 0;border-bottom:1px solid #ffffff14}.v19Section:last-child{border-bottom:0}.v19Section h3{margin:0 0 10px;font-size:13px}.v19Fields{display:grid;grid-template-columns:1fr 1fr;gap:9px}.v19Field{display:grid;gap:5px;font-size:11px;color:#bfd0d4}.v19Field.full{grid-column:1/-1}.v19Field input,.v19Field select,.v19Field textarea{width:100%;background:#132128!important;border-color:#58707a!important}.v19ColorGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.v19Range{display:grid;grid-template-columns:86px 1fr 42px;gap:8px;align-items:center;margin:8px 0}.v19Range output{text-align:right;color:#ffc58f;font:700 11px ui-monospace,monospace}.v19Fonts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;max-height:230px;overflow:auto}.v19Fonts button{padding:9px!important;text-align:left!important;background:#ffffff0a!important}.v19Fonts button.active{border-color:#ffa463!important;background:#ff9a4933!important}.v19Actions{display:flex;gap:7px;flex-wrap:wrap}.v19Actions button{flex:1 1 100px}.v19Notice{padding:9px 10px;border-radius:12px;background:#8ad7e31a;border:1px solid #95e6ee33;color:#cee8eb;font-size:11px}
+
+/* compact glass contextual menu instead of permanent floating bar */
+#clipMenu{width:250px!important;max-height:min(420px,70vh)!important;background:linear-gradient(150deg,#2d4149,#1d2e35)!important;color:#f4fafb!important;border:1px solid #7e99a466!important;border-radius:18px!important;box-shadow:0 16px 42px #07111688!important;padding:8px!important;backdrop-filter:blur(18px)!important}
+#clipMenu button{min-height:40px!important;margin-top:3px!important;background:#ffffff0b!important;color:#f4fafb!important;border:1px solid #ffffff14!important;border-radius:11px!important}.clipMenu button:hover{background:#ff9d4d25!important;border-color:#ffb17666!important}.clipMenu .danger{color:#ff9aa0!important}
+
+/* selection marquee specifically useful for captions */
+.v19CaptionBox{position:fixed;pointer-events:none;z-index:5000;border:1px solid #ffad6f;border-radius:6px;background:#ff9b5725;box-shadow:0 0 0 1px #0004}.clip.v19CaptionSelected{outline:2px solid #fff!important;box-shadow:0 0 0 4px #ff9c5466!important}
+
+/* effect lanes behave like normal layers while staying compact */
+.v19EffectBadge{position:absolute;right:18px;top:4px;font-size:10px;background:#fff9;color:#20424b;border-radius:7px;padding:2px 5px;z-index:7}
+
+/* Home must feel like the application entry point, not a popup */
+#v18Home{background:radial-gradient(circle at 16% 12%,#526b70 0,#293e43 35%,#111b20 82%)!important}
+#v18Home .v18HomeTop{background:#14242a66;backdrop-filter:blur(18px)}
+#v18HomeClose{display:none!important}
+
+@media(max-width:900px){#v19Inspector{right:8px;top:72px;max-height:calc(100vh - 88px)}#v19Library{width:calc(100vw - 18px)}.v19Grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){.v19Grid{grid-template-columns:repeat(2,minmax(0,1fr))}.v19Fields{grid-template-columns:1fr}.v19Field.full{grid-column:auto}.v19ColorGrid{grid-template-columns:1fr}#v19Inspector{inset:auto 7px 70px 7px;width:auto;top:auto;max-height:68vh}.v19Range{grid-template-columns:74px 1fr 38px}}
+
+/* Touca Editor v20 — direct timeline manipulation, stable layers and project thumbnails */
+html[data-touca-v20="true"] .clip .handle{
+  width:16px!important;
+  min-width:16px!important;
+  cursor:ew-resize!important;
+  touch-action:none!important;
+  background:transparent!important;
+  z-index:60!important;
+  color:#fff!important;
+  font-weight:900!important;
+  display:grid!important;
+  place-items:center!important;
+  text-shadow:0 1px 2px #000!important;
+}
+html[data-touca-v20="true"] .clip .handle:before{
+  content:'';position:absolute;top:5px;bottom:5px;width:3px;border-radius:3px;
+  background:linear-gradient(#fff,#dceef1);box-shadow:0 0 0 1px #152027,0 2px 5px #0006;
+}
+html[data-touca-v20="true"] .clip .handle.left{left:-4px!important}
+html[data-touca-v20="true"] .clip .handle.right{right:-4px!important}
+html[data-touca-v20="true"] .clip .handle.left:before{left:5px}
+html[data-touca-v20="true"] .clip .handle.right:before{right:5px}
+html[data-touca-v20="true"] .clip .handle:hover:before,
+html[data-touca-v20="true"] body.v20Resizing .clip.selected .handle:before{background:#ffb16e;box-shadow:0 0 0 1px #1e1007,0 0 12px #ff9a4c}
+html[data-touca-v20="true"] .clip{touch-action:none!important}
+html[data-touca-v20="true"] .clip+.clip{outline-offset:-1px}
+html[data-touca-v20="true"] .v20InvalidDrop{box-shadow:inset 0 0 0 2px #ff6473!important}
+html[data-touca-v20="true"] .track[data-track="effectsLocal"]{background:linear-gradient(90deg,#8ecddf10,#8ecddf20)!important;border-top:1px dashed #9edff055!important}
+html[data-touca-v20="true"] .trackHead[data-track-head="effectsLocal"]{color:#dff9ff!important}
+html[data-touca-v20="true"] .trackHead[data-track-head^="effects"]{min-height:38px!important}
+html[data-touca-v20="true"] body.v19DraggingLayer .track[data-track^="effects"],
+html[data-touca-v20="true"] body.v19DraggingLayer .track[data-track^="overlay"]{display:block!important}
+html[data-touca-v20="true"] body.v19DraggingLayer .trackHead[data-track-head^="effects"],
+html[data-touca-v20="true"] body.v19DraggingLayer .trackHead[data-track-head^="overlay"]{display:flex!important}
+html[data-touca-v20="true"] .clip[data-effect-scope="main"]{background:linear-gradient(#ecfbff,#bceef5 46%,#8ed9e5 52%,#cef4f8)!important}
+html[data-touca-v20="true"] .clip[data-effect-scope="all"]{background:linear-gradient(#d8ecff,#add0f4 46%,#7baee3 52%,#bddcf8)!important}
+
+.v20DurationBar{display:grid;grid-template-columns:auto minmax(180px,1fr) 64px;gap:12px;align-items:center;margin:3px 0 13px;padding:11px 12px;border-radius:14px;background:#0f1c226e;border:1px solid #7c929b44}
+.v20DurationBar>div{display:grid;gap:2px}.v20DurationBar b{font-size:12px}.v20DurationBar small{font-size:9px;color:#a9bdc2}.v20DurationBar output{text-align:right;font:800 11px ui-monospace,monospace;color:#ffc38b}.v20DurationBar input{width:100%}
+.v20MenuTitle{padding:7px 9px 6px;font-weight:850;font-size:12px;color:#d8eaee;border-bottom:1px solid #ffffff14;margin-bottom:4px}
+
+.v20ProjectCard{padding:0!important;overflow:hidden;min-height:235px!important;gap:0!important}
+.v20ProjectThumb{height:132px;display:grid;place-items:center;background:radial-gradient(circle at 45% 35%,#42636c,#15252b 68%);overflow:hidden;border-bottom:1px solid #ffffff12}
+.v20ProjectThumb img{width:100%;height:100%;object-fit:cover;display:block}.v20ProjectThumb span{font-size:42px;color:#dbeef1aa}
+.v20ProjectMeta{display:grid;gap:4px;padding:12px 14px 6px}.v20ProjectMeta strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.v20ProjectCard .v18ProjectActions{padding:7px 12px 12px;margin-top:0!important}.v20ProjectCard .v18ProjectActions button{min-height:38px!important;padding:0 10px!important;font-size:11px!important}.v20ProjectCard [data-rename]{flex:1.15!important}
+
+#v18BrandPanel .v19Fields{margin-bottom:12px}
+#v18BrandPanel .v19Actions{margin-top:12px}
+#v18BrandPanel .v19Notice{margin-top:12px}
+
+html[data-touca-v20="true"] #clipMenu{transition:none!important;animation:none!important}
+html[data-touca-v20="true"] #clipMenu.fading{opacity:1!important;transform:none!important;pointer-events:auto!important}
+
+@media(max-width:780px){.v20DurationBar{grid-template-columns:1fr 1fr}.v20DurationBar>div{grid-column:1/-1}.v20DurationBar output{align-self:center}.v20ProjectCard{min-height:220px!important}}
+
+/* Touca Editor v21 — clean trim zones + fluid visible dragging */
+html[data-touca-v21="true"] .clip .handle{display:none!important}
+html[data-touca-v21="true"] .v21TrimZone{position:absolute;top:0;bottom:0;width:12px;z-index:75;cursor:ew-resize;touch-action:none;background:transparent!important}
+html[data-touca-v21="true"] .v21TrimZone.left{left:-2px}
+html[data-touca-v21="true"] .v21TrimZone.right{right:-2px}
+html[data-touca-v21="true"] .v21TrimZone:after{content:'';position:absolute;top:7px;bottom:7px;width:2px;border-radius:3px;background:transparent;transition:background .12s,box-shadow .12s}
+html[data-touca-v21="true"] .v21TrimZone.left:after{left:4px}
+html[data-touca-v21="true"] .v21TrimZone.right:after{right:4px}
+html[data-touca-v21="true"] .v21TrimZone:hover:after,
+html[data-touca-v21="true"] body.v20Resizing .clip.selected .v21TrimZone:after{background:#ffb06a;box-shadow:0 0 0 1px #2b1608,0 0 9px #ff9a4c88}
+html[data-touca-v21="true"] .v21SourceDragging{opacity:.34!important;filter:saturate(.82);box-shadow:0 0 0 2px #c6f8ff88!important}
+html[data-touca-v21="true"] .v21ResizePreview{transition:none!important;box-shadow:0 0 0 2px #ffbd7e88!important}
+html[data-touca-v21="true"] .v21DragGhost{position:fixed!important;z-index:7000!important;pointer-events:none!important;margin:0!important;opacity:.92!important;transition:none!important;box-shadow:0 12px 30px #07121888,0 0 0 2px #e9fdffcc!important;cursor:grabbing!important;overflow:hidden!important;transform:translateZ(0);will-change:left,top,width}
+html[data-touca-v21="true"] .v21DragGhost.v21InvalidGhost{opacity:.55!important;box-shadow:0 12px 30px #07121888,0 0 0 2px #ff6878!important}
+html[data-touca-v21="true"] body.v21Dragging .track.v19TrackTarget{background:linear-gradient(90deg,#86ecff1c,#86ecff31)!important;box-shadow:inset 0 0 0 2px #b5f6ffcc!important}
+html[data-touca-v21="true"] .track[data-track="main"],
+html[data-touca-v21="true"] .trackHead[data-track-head="main"]{box-shadow:inset 0 -1px 0 #ffffff18}
+html[data-touca-v21="true"] .trackHead[data-track-head="main"]{font-weight:850;color:#f4fbfd}
+html[data-touca-v21="true"] #v21HomeBtn{min-width:78px!important;padding:8px 11px!important;border:1px solid #ffffff20!important;background:#ffffff09!important;color:inherit!important}
+html[data-touca-v21="true"] #v21HomeBtn:hover{background:#ffffff15!important;border-color:#ffffff38!important}

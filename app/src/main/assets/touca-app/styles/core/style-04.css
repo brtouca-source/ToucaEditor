@@ -1,0 +1,5 @@
+
+html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+body,body *:not(input):not(textarea):not([contenteditable="true"]):not([contenteditable=""]){user-select:none;-webkit-user-select:none}
+input,textarea,[contenteditable="true"],[contenteditable=""]{user-select:text;-webkit-user-select:text}
+img,video,canvas,svg{-webkit-user-drag:none;user-drag:none;-webkit-touch-callout:none}

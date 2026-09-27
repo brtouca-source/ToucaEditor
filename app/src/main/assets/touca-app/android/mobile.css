@@ -1,0 +1,26 @@
+html[data-android][data-next][data-next-theme][data-next] .app{height:100dvh!important;grid-template-rows:52px minmax(130px,1fr) minmax(180px,34dvh) 52px!important}
+html[data-android][data-next][data-next-theme][data-next] .workspace{grid-template-columns:minmax(0,1fr)!important}
+html[data-android][data-next][data-next-theme][data-next] .topbar{padding:0 8px!important;gap:6px;height:52px!important}
+html[data-android][data-next][data-next-theme][data-next] .projectName{width:70px!important;flex:1;min-width:35px}
+html[data-android][data-next][data-next-theme][data-next] .brand{font-size:11px;letter-spacing:0}
+html[data-android][data-next][data-next-theme][data-next] .brand span{display:none}
+html[data-android][data-next][data-next-theme][data-next] button{min-height:44px;min-width:44px;touch-action:manipulation}
+html[data-android][data-next][data-next-theme][data-next] .next-divider{display:none!important}
+html[data-android][data-next][data-next-theme][data-next] .library,html[data-android][data-next][data-next-theme][data-next] .inspector{display:none!important;position:fixed!important;inset:60px 8px 56px!important;width:auto!important;height:auto!important;z-index:500!important;border:1px solid var(--line)!important;border-radius:12px!important}
+html[data-android][data-next][data-next-theme][data-next][data-mobile-panel=library] .library,html[data-android][data-next][data-next-theme][data-next][data-inspector-open=true] .inspector{display:block!important}
+html[data-android][data-next][data-next-theme][data-next] .stageArea{grid-template-rows:44px minmax(0,1fr) 48px!important}
+html[data-android][data-next][data-next-theme][data-next] .stageWrap{padding:4px!important}
+html[data-android][data-next][data-next-theme][data-next] .stageToolbar{padding:0 4px;height:44px!important;overflow-x:auto}
+html[data-android][data-next][data-next-theme][data-next] .transport button{height:44px!important;min-height:44px!important;width:44px!important}
+html[data-android][data-next][data-next-theme][data-next] .timeline{grid-template-rows:48px minmax(0,1fr) 20px!important}
+html[data-android][data-next][data-next-theme][data-next] .timelineTools{height:48px!important;padding:2px 4px!important}
+html[data-android][data-next][data-next-theme][data-next] .timelineTools button{height:44px!important;min-height:44px!important;flex-shrink:0}
+html[data-android][data-next][data-next-theme][data-next] .timelineGrid{grid-template-columns:74px minmax(0,1fr)!important}
+html[data-android][data-next][data-next-theme][data-next] .trackHead{font-size:10px}
+html[data-android][data-next][data-next-theme][data-next] .clipKey::after{content:'';position:absolute;inset:-12px}
+html[data-android][data-next][data-next-theme][data-next] dialog{max-width:calc(100vw - 16px)!important;max-height:90dvh!important;overflow:auto!important}
+html[data-android][data-next][data-next-theme][data-next] #androidTools{display:flex;gap:4px;overflow-x:auto;background:var(--panel);padding:4px;border-top:1px solid var(--line)}
+html[data-android][data-next][data-next-theme][data-next] #androidTools button{white-space:nowrap;flex:1;padding:4px 8px}
+html[data-android][data-next][data-next-theme][data-next] #androidCloseLibrary{width:100%;margin-bottom:8px}
+html[data-android][data-next][data-next-theme][data-next] .clip .handle{width:22px!important;touch-action:none;background:#ff7a1866!important}
+html[data-android][data-next][data-next-theme][data-next] .clip{touch-action:none}

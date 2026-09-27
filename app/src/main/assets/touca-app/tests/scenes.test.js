@@ -1,0 +1,6 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),M=require('../project/scenes');
+test('markers never reach speech; emotion tags only excluded from alignment',()=>{const p=M.parse('◆ Essa é Gertrude. ◆ ◆ [risonho] Ela caiu! ◆');assert.equal(p.scenes.length,2);assert.equal(p.scenes[1].wordIndex,3);assert(!p.ttsText.includes('◆'));assert(p.ttsText.includes('[risonho]'));assert.equal(p.spokenText,'Essa é Gertrude. Ela caiu!');});
+test('numeric file order works across formats and equal names are stable',()=>{const files=['10.webp','02.jpg','1.png','3.avif','01.png'].map(name=>({name}));assert.deepEqual(M.natural(files).map(f=>f.name),['1.png','01.png','02.jpg','3.avif','10.webp']);});
+test('only anchored boundary words produce automatic scene times',()=>{const plan=M.parse('Ela cai. ◆ Ela levanta.');const a={words:[{start:0},{start:.5},{start:1.5,anchor:false,score:0},{start:2}]};assert.equal(M.boundaries(plan,a,3)[1].time,null);a.words[2]={start:1.5,anchor:true,score:1};assert.equal(M.boundaries(plan,a,3)[1].time,1.5);});
+test('scenes cover full audio without silence gaps; invalid order rejected',()=>{assert.deepEqual(M.intervals([0,1.25,2.5],4),[{start:0,duration:1.25},{start:1.25,duration:1.25},{start:2.5,duration:1.5}]);for(const points of [[0,NaN],[0,2,1],[0,4],[0,.01],[1]])assert.throws(()=>M.intervals(points,4));});

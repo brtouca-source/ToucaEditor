@@ -1,0 +1,10 @@
+/* Timeline-only geometry: the preview and export renderer do not use these styles. */
+html body .track .clip{box-sizing:border-box!important;min-width:0!important;animation:none!important;transition:background-color .12s,box-shadow .12s!important}
+html body .track .clip.selected{z-index:12}
+html body .track .clip .v21TrimZone{width:12px!important}
+html body .track .clip .v21TrimZone.left{left:-2px!important}
+html body .track .clip .v21TrimZone.right{right:-2px!important}
+html body .track .clip .v21TrimZone::after{content:'';position:absolute;top:6px;bottom:6px;width:3px;border-radius:2px;background:rgba(255,255,255,.75)}
+html body .track .clip .v21TrimZone.left::after{left:3px}
+html body .track .clip .v21TrimZone.right::after{right:3px}
+html body .track .clip.selected .v21TrimZone::after{background:#ffae68}

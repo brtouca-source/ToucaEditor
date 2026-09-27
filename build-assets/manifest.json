@@ -1,0 +1,79 @@
+[
+  {
+    "path": "app/src/main/assets/touca-app/resources/models/whisper-tiny/encoder_model_quantized.onnx",
+    "sha256": "fd9d995b9dcb0520f0dbf6cf68651af639fc385f594d9d876e69ca2802dc438e",
+    "parts": [
+      "build-assets/encoder_model_quantized.onnx.000.b64",
+      "build-assets/encoder_model_quantized.onnx.001.b64",
+      "build-assets/encoder_model_quantized.onnx.002.b64",
+      "build-assets/encoder_model_quantized.onnx.003.b64",
+      "build-assets/encoder_model_quantized.onnx.004.b64",
+      "build-assets/encoder_model_quantized.onnx.005.b64",
+      "build-assets/encoder_model_quantized.onnx.006.b64",
+      "build-assets/encoder_model_quantized.onnx.007.b64",
+      "build-assets/encoder_model_quantized.onnx.008.b64",
+      "build-assets/encoder_model_quantized.onnx.009.b64",
+      "build-assets/encoder_model_quantized.onnx.010.b64",
+      "build-assets/encoder_model_quantized.onnx.011.b64"
+    ]
+  },
+  {
+    "path": "app/src/main/assets/touca-app/resources/models/whisper-tiny/decoder_model_merged_quantized.onnx",
+    "sha256": "6c0c125986b007d2e3734bec84c18bda0152071b90b87fadac6d7764499927a0",
+    "parts": [
+      "build-assets/decoder_model_merged_quantized.onnx.000.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.001.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.002.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.003.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.004.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.005.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.006.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.007.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.008.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.009.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.010.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.011.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.012.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.013.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.014.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.015.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.016.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.017.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.018.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.019.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.020.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.021.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.022.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.023.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.024.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.025.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.026.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.027.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.028.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.029.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.030.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.031.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.032.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.033.b64",
+      "build-assets/decoder_model_merged_quantized.onnx.034.b64"
+    ]
+  },
+  {
+    "path": "app/src/main/assets/touca-app/resources/models/whisper-tiny/ort-wasm-simd.wasm",
+    "sha256": "9bd07bababc65f53d061f457233eeae501be7ceb8a2adb9eef52d87fe776d865",
+    "parts": [
+      "build-assets/ort-wasm-simd.wasm.000.b64",
+      "build-assets/ort-wasm-simd.wasm.001.b64",
+      "build-assets/ort-wasm-simd.wasm.002.b64",
+      "build-assets/ort-wasm-simd.wasm.003.b64",
+      "build-assets/ort-wasm-simd.wasm.004.b64",
+      "build-assets/ort-wasm-simd.wasm.005.b64",
+      "build-assets/ort-wasm-simd.wasm.006.b64",
+      "build-assets/ort-wasm-simd.wasm.007.b64",
+      "build-assets/ort-wasm-simd.wasm.008.b64",
+      "build-assets/ort-wasm-simd.wasm.009.b64",
+      "build-assets/ort-wasm-simd.wasm.010.b64",
+      "build-assets/ort-wasm-simd.wasm.011.b64"
+    ]
+  }
+]

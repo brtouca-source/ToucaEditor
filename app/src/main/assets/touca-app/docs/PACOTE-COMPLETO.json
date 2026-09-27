@@ -1,0 +1,12 @@
+{
+  "editor": "30.1.0",
+  "platform": "win32-x64",
+  "electron": "37.2.6",
+  "electron_zip_sha256": "f7732d90dc70b9c7415a06f97f47f1ad45af8d6d89f557f6b00cee613f9a508e",
+  "electron_source": "https://github.com/electron/electron/releases/tag/v37.2.6",
+  "ffmpeg": "6.1.1-essentials_build-www.gyan.dev",
+  "ffmpeg_source": "https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1",
+  "runtime": "official Electron executable renamed; all original runtime files retained except default_app.asar",
+  "windows_ui_tested": false,
+  "tests_passed": 27
+}

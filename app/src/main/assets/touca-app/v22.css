@@ -1,0 +1,7 @@
+/* Touca Editor v22 — only the new script-assisted caption UI. */
+.v22CaptionMode{display:grid;gap:9px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#171b20}
+.v22ModeTabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:3px;border-radius:10px;background:#101419}
+.v22ModeTabs button{padding:8px 10px;border:0;background:transparent;color:var(--muted);font-weight:750}
+.v22ModeTabs button.active{background:#2c333b;color:var(--text);box-shadow:inset 0 0 0 1px #ffffff12}
+.v22ScriptPane{display:grid;gap:7px}.v22ScriptPane textarea{resize:vertical;min-height:126px;max-height:260px;line-height:1.45}
+.v22ScriptInfo{display:flex;gap:10px;justify-content:space-between;align-items:flex-start;color:var(--muted);font-size:11px}.v22ScriptInfo span:first-child{color:var(--orange);font-weight:800;white-space:nowrap}
