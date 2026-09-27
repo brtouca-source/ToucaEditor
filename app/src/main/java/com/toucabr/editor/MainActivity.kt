@@ -48,8 +48,11 @@ class MainActivity : Activity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         root = File(filesDir,"projects").apply { mkdirs() }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         web = WebView(this)
+        web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
+        web.overScrollMode = android.view.View.OVER_SCROLL_NEVER
+        web.isVerticalScrollBarEnabled = false
+        web.isHorizontalScrollBarEnabled = false
         web.settings.apply {
             javaScriptEnabled = true; domStorageEnabled = true
             allowFileAccess = false; allowContentAccess = true
@@ -272,6 +275,7 @@ class MainActivity : Activity() {
             "readCredential"->{val f=File(filesDir,"credential.bin");if(!f.exists()) "" else {val obj=JSONObject(f.readText());val cipher=javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");cipher.init(javax.crypto.Cipher.DECRYPT_MODE,credentialKey(),javax.crypto.spec.GCMParameterSpec(128,Base64.decode(obj.getString("iv"),Base64.DEFAULT)));String(cipher.doFinal(Base64.decode(obj.getString("data"),Base64.DEFAULT)),Charsets.UTF_8)}}
             "writeCredential"->{val f=File(filesDir,"credential.bin");if(s(0).isEmpty())f.delete() else {require(s(0).length<=1024);val cipher=javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");cipher.init(javax.crypto.Cipher.ENCRYPT_MODE,credentialKey());atomic(f,JSONObject().put("iv",Base64.encodeToString(cipher.iv,Base64.NO_WRAP)).put("data",Base64.encodeToString(cipher.doFinal(s(0).toByteArray()),Base64.NO_WRAP)).toString())};true}
             "cancelClose"->true
+            "setKeepAwake"->{val enabled=a.optBoolean(0,false);runOnUiThread{if(enabled)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)};true}
             "getPaths"->JSONObject().put("projects",root.path)
             "listProjects"->JSONArray(root.listFiles().orEmpty().filter{File(it,"project.json").exists()}.mapNotNull{try{JSONObject(File(it,"meta.json").readText()).also{meta->val thumb=File(it,"thumb.txt");if(thumb.exists())meta.put("thumbnail",thumb.readText())}}catch(e:Exception){null}}.sortedByDescending{it.optLong("updatedAt")})
             "saveSnapshot"->{val d=dir(s(0));val obj=JSONObject(s(2));obj.put("projectId",s(0));obj.put("editorVersion","31.6.0-mobile");obj.put("projectSchemaVersion",3);val f=File(d,"project.json");if(!f.exists()&&obj.optJSONArray("clips")?.length()==0&&obj.optJSONArray("assets")?.length()==0)JSONObject().put("skipped",true)else{if(f.exists())f.copyTo(File(d,"project.backup.json"),true);atomic(f,obj.toString());val meta=JSONObject().put("id",s(0)).put("name",s(1)).put("updatedAt",System.currentTimeMillis()).put("clipCount",obj.optJSONArray("clips")?.length()?:0).put("assetCount",obj.optJSONArray("assets")?.length()?:0).put("ratio",obj.optString("ratio","9:16"));atomic(File(d,"meta.json"),meta.toString());meta}}
@@ -298,6 +302,7 @@ class MainActivity : Activity() {
         }
     }
     override fun onBackPressed(){web.evaluateJavascript("window.__toucaBack ? window.__toucaBack() : false"){r->if(r!="true")android.app.AlertDialog.Builder(this).setMessage("Sair do editor?").setPositiveButton("Sair"){_,_->finish()}.setNegativeButton("Continuar",null).show()}}
+    override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(::web.isInitialized)runOnUiThread{web.evaluateJavascript("window.ToucaAndroid?.performance?.onMemoryPressure?.($level)",null)}}
     override fun onDestroy(){
         picker?.invoke(null); permission?.deny()
         for(id in exports.keys.toList()) try { cancelExportJob(id) } catch (_: Exception) {}

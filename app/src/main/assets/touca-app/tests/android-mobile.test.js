@@ -1,0 +1,7 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
+test('Android modules load in platform/UI/performance/export/bootstrap order',()=>{const html=read('index.html'),scripts=[...html.matchAll(/<script\b[^>]*src="([^"]+)"/g)].map(m=>m[1]),order=['./android/mobile.js','./android/performance.js','./android/export.js','./android/bootstrap.js'].map(x=>scripts.indexOf(x));assert.ok(order.every(x=>x>=0));assert.deepEqual(order,[...order].sort((a,b)=>a-b));assert.ok(!scripts.includes('./android/runtime.js'))});
+test('Android performance preserves 31.6 gestures and cleans unused media',()=>{const s=read('android/performance.js');assert.match(s,/releaseUnusedMedia/);assert.match(s,/previewLevels/);assert.match(s,/Do not replace beginGesture/);assert.doesNotMatch(s,/preview'\)\.onpointerdown\s*=/)});
+test('Android export autosaves, streams and remains cancelable',()=>{const s=read('android/export.js');assert.match(s,/toucaSaveNow29/);assert.match(s,/fileExportWrite/);assert.match(s,/fileExportCancel/);assert.match(s,/setKeepAwake/);assert.match(s,/MediaRecorder/);assert.match(s,/VideoEncoder/)});
+test('Android bridge exposes namespace and binary transport fallback',()=>{const s=read('android/bridge.js');assert.match(s,/ToucaAndroid/);assert.match(s,/toucaBinary/);assert.match(s,/binaryWrite/);assert.match(s,/fileExportWrite/)});
