@@ -10,6 +10,7 @@
   android:roundIcon="@drawable/ic_touca_launcher"
   android:usesCleartextTraffic="false"
   android:allowBackup="false"
+  android:fullBackupContent="false"
   android:dataExtractionRules="@xml/data_extraction_rules"
   android:hardwareAccelerated="true">
   <activity android:name=".MainActivity" android:configChanges="orientation|screenSize|keyboardHidden" android:exported="true">
