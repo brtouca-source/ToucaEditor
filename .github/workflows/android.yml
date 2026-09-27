@@ -30,6 +30,24 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Restore stable testing signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: touca-editor-android-debug-signing-v1
+
+      - name: Ensure testing signing key
+        shell: bash
+        run: |
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            mkdir -p "$HOME/.android"
+            keytool -genkeypair -noprompt \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -alias androiddebugkey -keypass android \
+              -dname "CN=Touca Editor Testing,O=ToucaBR,C=BR" \
+              -keyalg RSA -keysize 2048 -validity 10000
+          fi
+
       - name: Restore and verify original offline models
         run: python3 tools/restore-models.py
 
@@ -44,8 +62,9 @@ jobs:
       - name: Build and lint testing APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug :app:lintDebug
 
-      - name: Compute APK SHA-256
+      - name: Verify APK and compute hashes
         run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk | tee app/build/outputs/apk/debug/app-debug.apk.cert.txt
           sha256sum app/build/outputs/apk/debug/app-debug.apk | tee app/build/outputs/apk/debug/app-debug.apk.sha256
 
       - uses: actions/upload-artifact@v4
@@ -54,6 +73,7 @@ jobs:
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/debug/app-debug.apk.sha256
+            app/build/outputs/apk/debug/app-debug.apk.cert.txt
             app/build/reports/lint-results-debug.html
             app/build/reports/lint-results-debug.txt
           if-no-files-found: error
