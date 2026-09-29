@@ -1,12 +1,16 @@
 name: Build Leitor Facil Universal
 
 on:
+  push:
+    branches: ["leitor-facil-j7"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -29,13 +33,21 @@ jobs:
           curl -fL --retry 4 --retry-delay 3             "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-pt_BR-edresson-low.tar.bz2"             -o /tmp/voice.tar.bz2
           tar -xjf /tmp/voice.tar.bz2 -C /tmp
           mv /tmp/vits-piper-pt_BR-edresson-low app/src/main/assets/model
+          test -f app/src/main/assets/model/pt_BR-edresson-low.onnx
+          test -f app/src/main/assets/model/tokens.txt
+          test -d app/src/main/assets/model/espeak-ng-data
 
       - name: Build APK
         shell: bash
         run: |
+          set -euxo pipefail
           cd LeitorFacil
           gradle --no-daemon :app:assembleDebug
           cp app/build/outputs/apk/debug/app-debug.apk ../LeitorFacil-Universal-v2.apk
+          cd ..
+          unzip -l LeitorFacil-Universal-v2.apk | grep "lib/armeabi-v7a/"
+          unzip -l LeitorFacil-Universal-v2.apk | grep "lib/arm64-v8a/"
+          ls -lh LeitorFacil-Universal-v2.apk
 
       - uses: actions/upload-artifact@v4
         with:
