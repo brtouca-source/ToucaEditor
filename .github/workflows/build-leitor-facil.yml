@@ -37,6 +37,17 @@ jobs:
           test -f app/src/main/assets/model/tokens.txt
           test -d app/src/main/assets/model/espeak-ng-data
 
+      - name: Probe Supertonic 3 INT8 size
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 4 --retry-delay 3             "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2"             -o /tmp/supertonic.tar.bz2
+          ls -lh /tmp/supertonic.tar.bz2
+          mkdir -p /tmp/supertonic
+          tar -xjf /tmp/supertonic.tar.bz2 -C /tmp/supertonic
+          du -sh /tmp/supertonic/*
+          find /tmp/supertonic -maxdepth 2 -type f -printf '%p %k KB\n' | sort
+
       - name: Build APK
         shell: bash
         run: |
