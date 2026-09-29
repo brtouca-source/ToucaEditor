@@ -1,6 +1,5 @@
 package com.toucabr.leitorfacil
 
-import android.app.ActivityManager
 import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -23,22 +22,15 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 
 object NeuralSpeech {
+    private const val DEFAULT_SPEED = 1.25f
+    private const val IDLE_RELEASE_MS = 75_000L
+    private const val LEAVE_CHAT_RELEASE_MS = 12_000L
+
     private val executor = Executors.newSingleThreadExecutor()
     private val generation = AtomicInteger(0)
     private val speaking = AtomicBoolean(false)
+    private val keepWarm = AtomicBoolean(false)
     private val releaseHandler = Handler(Looper.getMainLooper())
-    private const val IDLE_RELEASE_MS = 60_000L
-    private val releaseRunnable = Runnable {
-        executor.execute {
-            if (!speaking.get()) {
-                try {
-                    tts?.release()
-                } catch (_: Throwable) {
-                }
-                tts = null
-            }
-        }
-    }
 
     @Volatile
     private var tts: OfflineTts? = null
@@ -48,6 +40,49 @@ object NeuralSpeech {
 
     @Volatile
     private var currentTrack: AudioTrack? = null
+
+    private val releaseRunnable = Runnable {
+        executor.execute {
+            if (!speaking.get() && !keepWarm.get()) {
+                try {
+                    tts?.release()
+                } catch (_: Throwable) {
+                }
+                tts = null
+            }
+        }
+    }
+
+    /**
+     * Copies the embedded model out of the APK while the user is still in the
+     * app. It does not start the neural engine and does not play anything.
+     * This removes a large first-use delay from the first WhatsApp message.
+     */
+    fun prepareModelFiles(context: Context) {
+        val appContext = context.applicationContext
+        executor.execute {
+            try {
+                ensureModel(appContext)
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    /**
+     * An open conversation is the only place where low-latency speech matters.
+     * Keep the model resident while the user remains in that chat so every tap
+     * after the first one starts much faster.
+     */
+    fun enterConversation(context: Context) {
+        keepWarm.set(true)
+        releaseHandler.removeCallbacks(releaseRunnable)
+        warmUp(context)
+    }
+
+    fun leaveConversation() {
+        keepWarm.set(false)
+        scheduleIdleRelease(LEAVE_CHAT_RELEASE_MS)
+    }
 
     fun warmUp(
         context: Context,
@@ -97,6 +132,7 @@ object NeuralSpeech {
 
         executor.execute {
             var track: AudioTrack? = null
+
             try {
                 if (tts == null) {
                     tts = createEngine(context.applicationContext)
@@ -125,11 +161,15 @@ object NeuralSpeech {
                 track.play()
 
                 var framesWritten = 0L
+
                 val config = GenerationConfig(
                     silenceScale = 0.10f,
-                    speed = 1.0f,
+                    speed = DEFAULT_SPEED,
                     sid = sid.coerceIn(0, 9),
-                    numSteps = qualitySteps(context),
+                    // Sherpa's Supertonic default is 5. The previous modern-device
+                    // path used up to 8, which costs extra generation time. Five
+                    // keeps the voice quality while prioritizing response speed.
+                    numSteps = 5,
                     extra = mapOf("lang" to "pt")
                 )
 
@@ -151,15 +191,13 @@ object NeuralSpeech {
                                 generationId = myGeneration
                             )
                             framesWritten += writtenFrames
+
                             if (generation.get() == myGeneration) 1 else 0
                         }
                     }
                 }
 
                 if (generation.get() == myGeneration) {
-                    // Generation finishing does not mean the AudioTrack buffer has
-                    // reached the speaker. Wait for the actual playback head so the
-                    // final syllable is never clipped.
                     drainTrack(
                         track = track,
                         totalFrames = framesWritten,
@@ -198,9 +236,17 @@ object NeuralSpeech {
         scheduleIdleRelease()
     }
 
-    private fun scheduleIdleRelease() {
+    private fun scheduleIdleRelease(
+        delayMs: Long = IDLE_RELEASE_MS
+    ) {
         releaseHandler.removeCallbacks(releaseRunnable)
-        releaseHandler.postDelayed(releaseRunnable, IDLE_RELEASE_MS)
+
+        if (keepWarm.get()) return
+
+        releaseHandler.postDelayed(
+            releaseRunnable,
+            delayMs
+        )
     }
 
     private fun createEngine(context: Context): OfflineTts {
@@ -251,21 +297,6 @@ object NeuralSpeech {
         )
     }
 
-    private fun qualitySteps(context: Context): Int {
-        if (isLegacy32Bit()) return 5
-
-        val memoryClass = (
-            context.getSystemService(Context.ACTIVITY_SERVICE)
-                as? ActivityManager
-            )?.memoryClass ?: 256
-
-        return when {
-            memoryClass <= 192 -> 5
-            memoryClass <= 384 -> 6
-            else -> 8
-        }
-    }
-
     private fun isLegacy32Bit(): Boolean {
         return Build.VERSION.SDK_INT < 21 ||
             Build.SUPPORTED_64_BIT_ABIS.isEmpty()
@@ -313,16 +344,21 @@ object NeuralSpeech {
         val startedAt = System.currentTimeMillis()
         val initialHead = playbackHead(track)
         val remaining = (totalFrames - initialHead).coerceAtLeast(0L)
+
         val expectedMs = (
-            remaining * 1000L / sampleRate.coerceAtLeast(1)
+            remaining * 1000L /
+                sampleRate.coerceAtLeast(1)
             ) + 1400L
-        val deadline = startedAt + expectedMs.coerceAtMost(20_000L)
+
+        val deadline = startedAt +
+            expectedMs.coerceAtMost(20_000L)
 
         while (
             generation.get() == generationId &&
             System.currentTimeMillis() < deadline
         ) {
             if (playbackHead(track) >= totalFrames) break
+
             try {
                 Thread.sleep(12L)
             } catch (_: InterruptedException) {
@@ -330,7 +366,6 @@ object NeuralSpeech {
             }
         }
 
-        // Tiny hardware-buffer grace period after the reported playback head.
         if (generation.get() == generationId) {
             try {
                 Thread.sleep(35L)
@@ -341,7 +376,8 @@ object NeuralSpeech {
 
     private fun playbackHead(track: AudioTrack): Long {
         return try {
-            track.playbackHeadPosition.toLong() and 0xffffffffL
+            track.playbackHeadPosition.toLong() and
+                0xffffffffL
         } catch (_: Throwable) {
             0L
         }
@@ -350,7 +386,10 @@ object NeuralSpeech {
     private fun stopTrackOnly() {
         val track = currentTrack
         currentTrack = null
-        safeRelease(track, immediate = true)
+        safeRelease(
+            track = track,
+            immediate = true
+        )
     }
 
     private fun safeRelease(
@@ -364,6 +403,7 @@ object NeuralSpeech {
                 track.pause()
             } catch (_: Throwable) {
             }
+
             try {
                 track.flush()
             } catch (_: Throwable) {
@@ -381,7 +421,9 @@ object NeuralSpeech {
         }
     }
 
-    private fun floatToPcm16(samples: FloatArray): ByteArray {
+    private fun floatToPcm16(
+        samples: FloatArray
+    ): ByteArray {
         val out = ByteArray(samples.size * 2)
         var index = 0
 
@@ -389,8 +431,11 @@ object NeuralSpeech {
             val value = (
                 sample.coerceIn(-1f, 1f) * 32767f
                 ).toInt()
-            out[index++] = (value and 0xff).toByte()
-            out[index++] = ((value shr 8) and 0xff).toByte()
+
+            out[index++] =
+                (value and 0xff).toByte()
+            out[index++] =
+                ((value shr 8) and 0xff).toByte()
         }
 
         return out
@@ -400,10 +445,14 @@ object NeuralSpeech {
         text: String,
         maxChars: Int = 760
     ): List<String> {
-        if (text.length <= maxChars) return listOf(text)
+        if (text.length <= maxChars) {
+            return listOf(text)
+        }
 
         val locale = Locale("pt", "BR")
-        val iterator = BreakIterator.getSentenceInstance(locale)
+        val iterator =
+            BreakIterator.getSentenceInstance(locale)
+
         iterator.setText(text)
 
         val sentences = ArrayList<String>()
@@ -411,14 +460,22 @@ object NeuralSpeech {
         var end = iterator.next()
 
         while (end != BreakIterator.DONE) {
-            val sentence = text.substring(start, end).trim()
-            if (sentence.isNotBlank()) sentences.add(sentence)
+            val sentence =
+                text.substring(start, end).trim()
+
+            if (sentence.isNotBlank()) {
+                sentences.add(sentence)
+            }
+
             start = end
             end = iterator.next()
         }
 
         if (sentences.isEmpty()) {
-            return splitOversized(text, maxChars)
+            return splitOversized(
+                text,
+                maxChars
+            )
         }
 
         val result = ArrayList<String>()
@@ -427,30 +484,49 @@ object NeuralSpeech {
         for (sentence in sentences) {
             if (sentence.length > maxChars) {
                 if (current.isNotEmpty()) {
-                    result.add(current.toString().trim())
+                    result.add(
+                        current.toString().trim()
+                    )
                     current.clear()
                 }
-                result.addAll(splitOversized(sentence, maxChars))
+
+                result.addAll(
+                    splitOversized(
+                        sentence,
+                        maxChars
+                    )
+                )
                 continue
             }
 
             if (
                 current.isNotEmpty() &&
-                current.length + 1 + sentence.length > maxChars
+                current.length +
+                    1 +
+                    sentence.length > maxChars
             ) {
-                result.add(current.toString().trim())
+                result.add(
+                    current.toString().trim()
+                )
                 current.clear()
             }
 
-            if (current.isNotEmpty()) current.append(' ')
+            if (current.isNotEmpty()) {
+                current.append(' ')
+            }
+
             current.append(sentence)
         }
 
         if (current.isNotEmpty()) {
-            result.add(current.toString().trim())
+            result.add(
+                current.toString().trim()
+            )
         }
 
-        return result.filter { it.isNotBlank() }
+        return result.filter {
+            it.isNotBlank()
+        }
     }
 
     private fun splitOversized(
@@ -461,14 +537,31 @@ object NeuralSpeech {
         var remaining = text.trim()
 
         while (remaining.length > maxChars) {
-            var cut = remaining.lastIndexOf(' ', maxChars)
-            if (cut < maxChars / 2) cut = maxChars
+            var cut =
+                remaining.lastIndexOf(
+                    ' ',
+                    maxChars
+                )
 
-            result.add(remaining.substring(0, cut).trim())
-            remaining = remaining.substring(cut).trim()
+            if (cut < maxChars / 2) {
+                cut = maxChars
+            }
+
+            result.add(
+                remaining.substring(
+                    0,
+                    cut
+                ).trim()
+            )
+
+            remaining =
+                remaining.substring(cut).trim()
         }
 
-        if (remaining.isNotBlank()) result.add(remaining)
+        if (remaining.isNotBlank()) {
+            result.add(remaining)
+        }
+
         return result
     }
 
@@ -477,11 +570,19 @@ object NeuralSpeech {
             context.filesDir,
             "supertonic3-int8-v1"
         )
-        val marker = File(outDir, ".ready")
+        val marker = File(
+            outDir,
+            ".ready"
+        )
 
-        if (marker.exists()) return outDir
+        if (marker.exists()) {
+            return outDir
+        }
 
-        if (outDir.exists()) outDir.deleteRecursively()
+        if (outDir.exists()) {
+            outDir.deleteRecursively()
+        }
+
         outDir.mkdirs()
 
         copyAssetTree(
@@ -515,15 +616,25 @@ object NeuralSpeech {
         assetPath: String,
         dest: File
     ) {
-        val list = context.assets.list(assetPath) ?: emptyArray()
+        val list =
+            context.assets.list(assetPath)
+                ?: emptyArray()
 
         if (list.isEmpty()) {
             dest.parentFile?.mkdirs()
-            context.assets.open(assetPath).use { input ->
-                FileOutputStream(dest).use { output ->
-                    input.copyTo(output, 1024 * 256)
+
+            context.assets
+                .open(assetPath)
+                .use { input ->
+                    FileOutputStream(dest).use {
+                            output ->
+                        input.copyTo(
+                            output,
+                            1024 * 256
+                        )
+                    }
                 }
-            }
+
             return
         }
 
@@ -532,7 +643,8 @@ object NeuralSpeech {
         for (name in list) {
             copyAssetTree(
                 context = context,
-                assetPath = assetPath + "/" + name,
+                assetPath =
+                    assetPath + "/" + name,
                 dest = File(dest, name)
             )
         }
