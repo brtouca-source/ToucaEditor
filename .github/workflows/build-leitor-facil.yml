@@ -1,4 +1,4 @@
-name: Build Leitor Facil v3 Offline
+name: Build Leitor Facil v3.1 Offline
 
 on:
   push:
@@ -56,15 +56,15 @@ jobs:
           set -euxo pipefail
           cd LeitorFacil
           gradle --no-daemon :app:assembleDebug
-          cp app/build/outputs/apk/debug/app-debug.apk ../LeitorFacil-v3-Offline.apk
+          cp app/build/outputs/apk/debug/app-debug.apk ../LeitorFacil-v3.1-Offline.apk
           cd ..
-          unzip -l LeitorFacil-v3-Offline.apk | grep "lib/armeabi-v7a/"
-          unzip -l LeitorFacil-v3-Offline.apk | grep "lib/arm64-v8a/"
-          unzip -l LeitorFacil-v3-Offline.apk | grep "assets/model/voice.bin"
-          ls -lh LeitorFacil-v3-Offline.apk
+          unzip -l LeitorFacil-v3.1-Offline.apk | grep "lib/armeabi-v7a/"
+          unzip -l LeitorFacil-v3.1-Offline.apk | grep "lib/arm64-v8a/"
+          unzip -l LeitorFacil-v3.1-Offline.apk | grep "assets/model/voice.bin"
+          ls -lh LeitorFacil-v3.1-Offline.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: LeitorFacil-v3-Offline
-          path: LeitorFacil-v3-Offline.apk
+          name: LeitorFacil-v3.1-Offline
+          path: LeitorFacil-v3.1-Offline.apk
           if-no-files-found: error
