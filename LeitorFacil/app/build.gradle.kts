@@ -8,11 +8,11 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.toucabr.leitorfacil"
+        applicationId = "com.toucabr.leitorfacil.stable"
         minSdk = 23
         targetSdk = 34
-        versionCode = 5
-        versionName = "3.2"
+        versionCode = 6
+        versionName = "3.2.1"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
