@@ -2,13 +2,11 @@ package com.toucabr.leitorfacil
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
-import android.content.Context
 import android.graphics.Color
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -17,73 +15,174 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.FrameLayout
-import android.widget.TextView
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 
 class WhatsAppReaderService : AccessibilityService() {
-    private var windowManager: WindowManager? = null
-    private var overlayView: View? = null
-    private var overlayParams: WindowManager.LayoutParams? = null
-    private var visible = false
+    private data class TargetOverlay(
+        val candidate: MessageExtractor.Candidate,
+        val view: View
+    )
 
     private val main = Handler(Looper.getMainLooper())
-    private val whatsappPackages = setOf("com.whatsapp", "com.whatsapp.w4b")
+    private val whatsappPackages = setOf(
+        "com.whatsapp",
+        "com.whatsapp.w4b"
+    )
+
+    private var windowManager: WindowManager? = null
+    private val targets = ArrayList<TargetOverlay>()
+    private var targetSignature = ""
+
+    private var highlightView: View? = null
+    private var highlightBounds: Rect? = null
 
     @Volatile
     private var currentMessageKey: String? = null
 
+    @Volatile
+    private var currentMessageText: String? = null
+
+    private val refreshPending = AtomicBoolean(false)
+
     override fun onServiceConnected() {
         super.onServiceConnected()
-
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
-        if (Build.VERSION.SDK_INT >= 24) {
-            createDirectTouchOverlay()
-        } else {
-            createLegacyBubble()
-        }
+        // Prepare the local model silently and outside the UI thread.
+        main.postDelayed({
+            NeuralSpeech.warmUp(this)
+        }, 900L)
 
-        NeuralSpeech.warmUp(this)
+        scheduleRefresh(100L)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val pkg = event?.packageName?.toString().orEmpty()
+        if (event == null) return
 
-        if (pkg in whatsappPackages) {
-            showOverlay()
-            if (Build.VERSION.SDK_INT >= 24) {
-                updateDirectOverlayBounds()
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                scheduleRefresh(90L)
             }
-        } else if (pkg.isNotBlank() && pkg != packageName) {
-            hideOverlay()
+
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                scheduleRefresh(90L)
+            }
+
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                // WhatsApp can emit many content-change events in a burst.
+                // Coalesce them so the accessibility tree is not continuously walked.
+                scheduleRefresh(220L)
+            }
         }
     }
 
     override fun onInterrupt() {
-        stopReading()
+        stopReading(160L)
     }
 
     override fun onDestroy() {
-        stopReading()
-        removeOverlay()
+        NeuralSpeech.stop()
+        clearTargets()
+        removeHighlight(immediate = true)
         super.onDestroy()
     }
 
-    private fun createDirectTouchOverlay() {
-        if (overlayView != null) return
+    private fun scheduleRefresh(delayMs: Long) {
+        if (!refreshPending.compareAndSet(false, true)) return
+
+        main.postDelayed({
+            refreshPending.set(false)
+            refreshTargets()
+        }, delayMs)
+    }
+
+    private fun refreshTargets() {
+        val root = rootInActiveWindow
+
+        if (root == null) {
+            clearTargets()
+            return
+        }
+
+        try {
+            val pkg = root.packageName?.toString().orEmpty()
+
+            if (pkg !in whatsappPackages) {
+                clearTargets()
+                removeHighlight(immediate = true)
+                return
+            }
+
+            val metrics = resources.displayMetrics
+            val messages = MessageExtractor.visibleMessages(
+                root = root,
+                screenWidth = metrics.widthPixels,
+                screenHeight = metrics.heightPixels,
+                density = metrics.density
+            )
+
+            val signature = messages.joinToString("§") {
+                it.stableKey()
+            }
+
+            if (signature != targetSignature) {
+                rebuildTargets(messages)
+                targetSignature = signature
+            }
+
+            repositionActiveHighlight(messages)
+        } finally {
+            try {
+                root.recycle()
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    private fun rebuildTargets(
+        messages: List<MessageExtractor.Candidate>
+    ) {
+        clearTargets(resetSignature = false)
+
+        for (candidate in messages) {
+            addTarget(candidate)
+        }
+    }
+
+    private fun addTarget(
+        candidate: MessageExtractor.Candidate
+    ) {
+        val wm = windowManager ?: return
+        val density = resources.displayMetrics.density
+
+        // Keep the touch interception close to the visible text instead of
+        // covering the whole WhatsApp conversation.
+        val area = Rect(candidate.textBounds)
+        val expandX = (7 * density).toInt()
+        val expandY = (6 * density).toInt()
+        area.inset(-expandX, -expandY)
+
+        // Never let the hit area extend beyond the message bubble.
+        area.left = area.left.coerceAtLeast(candidate.bubbleBounds.left)
+        area.top = area.top.coerceAtLeast(candidate.bubbleBounds.top)
+        area.right = area.right.coerceAtMost(candidate.bubbleBounds.right)
+        area.bottom = area.bottom.coerceAtMost(candidate.bubbleBounds.bottom)
+
+        if (area.width() < dp(14) || area.height() < dp(14)) return
 
         val view = FrameLayout(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
-            isClickable = true
             isFocusable = false
-            contentDescription = "Área de leitura de mensagens"
+            isClickable = true
+            contentDescription = "Ler mensagem"
         }
 
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            dp(300),
+            area.width(),
+            area.height(),
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -91,522 +190,63 @@ class WhatsAppReaderService : AccessibilityService() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = dp(72)
+            x = area.left
+            y = area.top
         }
 
-        attachDirectTouchListener(view)
-        overlayView = view
-        overlayParams = params
-    }
-
-    private fun attachDirectTouchListener(view: View) {
-        val slop = ViewConfiguration.get(this).scaledTouchSlop
-        val longPressMs = 560L
-
-        var downX = 0f
-        var downY = 0f
-        var downAt = 0L
-        var lastX = 0f
-        var lastY = 0f
-        var moved = false
-        var isDown = false
-        var longTriggered = false
-
-        val longPressAction = Runnable {
-            if (
-                isDown &&
-                !moved &&
-                !longTriggered &&
-                Build.VERSION.SDK_INT >= 24
-            ) {
-                longTriggered = true
-                readMessageAt(
-                    downX.toInt(),
-                    downY.toInt(),
-                    fast = true
-                )
-            }
-        }
-
-        view.setOnTouchListener { _, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = event.rawX
-                    downY = event.rawY
-                    lastX = downX
-                    lastY = downY
-                    downAt = System.currentTimeMillis()
-                    moved = false
-                    isDown = true
-                    longTriggered = false
-                    main.postDelayed(longPressAction, longPressMs)
-                    true
-                }
-
-                MotionEvent.ACTION_MOVE -> {
-                    lastX = event.rawX
-                    lastY = event.rawY
-
-                    if (
-                        abs(lastX - downX) > slop ||
-                        abs(lastY - downY) > slop
-                    ) {
-                        moved = true
-                        main.removeCallbacks(longPressAction)
-                    }
-                    true
-                }
-
-                MotionEvent.ACTION_UP -> {
-                    isDown = false
-                    main.removeCallbacks(longPressAction)
-
-                    val duration = (
-                        System.currentTimeMillis() - downAt
-                    ).coerceIn(60L, 900L)
-
-                    if (moved) {
-                        replayGesture(
-                            downX,
-                            downY,
-                            event.rawX,
-                            event.rawY,
-                            duration
-                        )
-                    } else if (!longTriggered) {
-                        readOrPassTap(
-                            event.rawX.toInt(),
-                            event.rawY.toInt()
-                        )
-                    }
-
-                    true
-                }
-
-                MotionEvent.ACTION_CANCEL -> {
-                    isDown = false
-                    main.removeCallbacks(longPressAction)
-
-                    if (moved) {
-                        replayGesture(
-                            downX,
-                            downY,
-                            lastX,
-                            lastY,
-                            (
-                                System.currentTimeMillis() - downAt
-                            ).coerceIn(60L, 900L)
-                        )
-                    }
-
-                    true
-                }
-
-                else -> true
-            }
-        }
-    }
-
-    private fun readOrPassTap(x: Int, y: Int) {
-        val candidate = findMessageAt(x, y)
-
-        if (candidate == null) {
-            replayTap(x.toFloat(), y.toFloat())
-            return
-        }
-
-        val key = candidate.stableKey()
-
-        if (
-            currentMessageKey == key &&
-            NeuralSpeech.isSpeaking()
-        ) {
-            stopReading()
-            return
-        }
-
-        currentMessageKey = key
-
-        NeuralSpeech.speak(
-            this,
-            candidate.text,
-            speed = 1.0f,
-            onComplete = {
-                if (currentMessageKey == key) {
-                    currentMessageKey = null
-                }
-            },
-            onError = {
-                if (currentMessageKey == key) {
-                    currentMessageKey = null
-                }
-            }
+        attachTargetTouch(
+            view = view,
+            candidate = candidate
         )
-    }
-
-    private fun readMessageAt(
-        x: Int,
-        y: Int,
-        fast: Boolean
-    ) {
-        val candidate = findMessageAt(x, y)
-
-        if (candidate == null) {
-            if (Build.VERSION.SDK_INT >= 24) {
-                replayLongPress(
-                    x.toFloat(),
-                    y.toFloat()
-                )
-            }
-            return
-        }
-
-        stopReading()
-
-        val key = candidate.stableKey()
-        currentMessageKey = key
-
-        val speed = if (fast) {
-            getLongPressSpeed()
-        } else {
-            1.0f
-        }
-
-        NeuralSpeech.speak(
-            this,
-            candidate.text,
-            speed = speed,
-            onComplete = {
-                if (currentMessageKey == key) {
-                    currentMessageKey = null
-                }
-            },
-            onError = {
-                if (currentMessageKey == key) {
-                    currentMessageKey = null
-                }
-            }
-        )
-    }
-
-    private fun findMessageAt(
-        x: Int,
-        y: Int
-    ): MessageExtractor.Candidate? {
-        val root = rootInActiveWindow ?: return null
 
         try {
-            val pkg = root.packageName?.toString().orEmpty()
-            if (pkg !in whatsappPackages) return null
-
-            return MessageExtractor.atPoint(
-                root,
-                x,
-                y,
-                resources.displayMetrics.heightPixels,
-                resources.displayMetrics.density
+            wm.addView(view, params)
+            targets.add(
+                TargetOverlay(
+                    candidate = candidate,
+                    view = view
+                )
             )
-        } finally {
-            try {
-                root.recycle()
-            } catch (_: Throwable) {
-            }
-        }
-    }
-
-    private fun updateDirectOverlayBounds() {
-        if (Build.VERSION.SDK_INT < 24) return
-
-        val view = overlayView ?: return
-        val params = overlayParams ?: return
-        val root = rootInActiveWindow ?: return
-
-        try {
-            val pkg = root.packageName?.toString().orEmpty()
-            if (pkg !in whatsappPackages) return
-
-            val rootBounds = Rect()
-            root.getBoundsInScreen(rootBounds)
-
-            if (
-                rootBounds.width() <= 0 ||
-                rootBounds.height() <= 0
-            ) {
-                return
-            }
-
-            val keyboardTop = findKeyboardTop()
-            val effectiveBottom = if (
-                keyboardTop != null &&
-                keyboardTop > rootBounds.top &&
-                keyboardTop < rootBounds.bottom
-            ) {
-                keyboardTop
-            } else {
-                rootBounds.bottom
-            }
-
-            val topInset = dp(72)
-            val bottomInset = dp(72)
-            val top = rootBounds.top + topInset
-            val bottom = effectiveBottom - bottomInset
-
-            if (bottom - top < dp(80)) {
-                hideOverlay()
-                return
-            }
-
-            var changed = false
-
-            if (params.x != rootBounds.left) {
-                params.x = rootBounds.left
-                changed = true
-            }
-
-            if (params.y != top) {
-                params.y = top
-                changed = true
-            }
-
-            if (params.width != rootBounds.width()) {
-                params.width = rootBounds.width()
-                changed = true
-            }
-
-            val newHeight = bottom - top
-            if (params.height != newHeight) {
-                params.height = newHeight
-                changed = true
-            }
-
-            if (changed && visible) {
-                try {
-                    windowManager?.updateViewLayout(
-                        view,
-                        params
-                    )
-                } catch (_: Throwable) {
-                }
-            }
-        } finally {
-            try {
-                root.recycle()
-            } catch (_: Throwable) {
-            }
-        }
-    }
-
-    private fun findKeyboardTop(): Int? {
-        if (Build.VERSION.SDK_INT < 21) return null
-
-        return try {
-            var best: Int? = null
-
-            for (window in windows) {
-                if (
-                    window.type ==
-                    AccessibilityWindowInfo.TYPE_INPUT_METHOD
-                ) {
-                    val rect = Rect()
-                    window.getBoundsInScreen(rect)
-
-                    if (rect.height() > 0) {
-                        if (best == null || rect.top < best) {
-                            best = rect.top
-                        }
-                    }
-                }
-            }
-
-            best
         } catch (_: Throwable) {
-            null
         }
     }
 
-    private fun replayTap(
-        x: Float,
-        y: Float
-    ) {
-        if (Build.VERSION.SDK_INT < 24) return
-
-        replayGesture(
-            x,
-            y,
-            x + 0.1f,
-            y + 0.1f,
-            55L
-        )
-    }
-
-    private fun replayLongPress(
-        x: Float,
-        y: Float
-    ) {
-        if (Build.VERSION.SDK_INT < 24) return
-
-        replayGesture(
-            x,
-            y,
-            x + 0.1f,
-            y + 0.1f,
-            650L
-        )
-    }
-
-    private fun replayGesture(
-        startX: Float,
-        startY: Float,
-        endX: Float,
-        endY: Float,
-        durationMs: Long
-    ) {
-        if (Build.VERSION.SDK_INT < 24) return
-
-        setDirectOverlayTouchable(false)
-
-        main.postDelayed({
-            val path = Path().apply {
-                moveTo(startX, startY)
-                lineTo(endX, endY)
-            }
-
-            val gesture = GestureDescription.Builder()
-                .addStroke(
-                    GestureDescription.StrokeDescription(
-                        path,
-                        0L,
-                        durationMs.coerceIn(40L, 900L)
-                    )
-                )
-                .build()
-
-            val callback = object :
-                GestureResultCallback() {
-
-                override fun onCompleted(
-                    gestureDescription: GestureDescription?
-                ) {
-                    main.postDelayed({
-                        if (visible) {
-                            setDirectOverlayTouchable(true)
-                        }
-                    }, 35L)
-                }
-
-                override fun onCancelled(
-                    gestureDescription: GestureDescription?
-                ) {
-                    main.postDelayed({
-                        if (visible) {
-                            setDirectOverlayTouchable(true)
-                        }
-                    }, 35L)
-                }
-            }
-
-            val accepted = dispatchGesture(
-                gesture,
-                callback,
-                main
-            )
-
-            if (!accepted) {
-                setDirectOverlayTouchable(true)
-            }
-        }, 24L)
-    }
-
-    private fun setDirectOverlayTouchable(
-        touchable: Boolean
-    ) {
-        if (Build.VERSION.SDK_INT < 24) return
-
-        val view = overlayView ?: return
-        val params = overlayParams ?: return
-
-        val newFlags = if (touchable) {
-            params.flags and
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-        } else {
-            params.flags or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-        }
-
-        if (newFlags == params.flags) return
-
-        params.flags = newFlags
-
-        if (visible) {
-            try {
-                windowManager?.updateViewLayout(
-                    view,
-                    params
-                )
-            } catch (_: Throwable) {
-            }
-        }
-    }
-
-    private fun createLegacyBubble() {
-        if (overlayView != null) return
-
-        val size = dp(62)
-
-        val background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(Color.rgb(18, 140, 126))
-            setStroke(dp(3), Color.WHITE)
-        }
-
-        val view = TextView(this).apply {
-            text = "🔊"
-            textSize = 27f
-            gravity = Gravity.CENTER
-            this.background = background
-            contentDescription = "Ler mensagem"
-        }
-
-        val params = WindowManager.LayoutParams(
-            size,
-            size,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.END
-            x = dp(10)
-            y = resources.displayMetrics.heightPixels / 2
-        }
-
-        attachLegacyBubbleListener(view, params)
-
-        overlayView = view
-        overlayParams = params
-    }
-
-    private fun attachLegacyBubbleListener(
+    private fun attachTargetTouch(
         view: View,
-        params: WindowManager.LayoutParams
+        candidate: MessageExtractor.Candidate
     ) {
         val slop = ViewConfiguration.get(this).scaledTouchSlop
+        val longPressDelegateAt = 260L
 
         var downX = 0f
         var downY = 0f
-        var startY = 0
-        var moved = false
         var downAt = 0L
+        var moved = false
+        var longDelegated = false
+
+        val delegateLongPress = Runnable {
+            if (!moved && !longDelegated) {
+                longDelegated = true
+                delegateLongPressToWhatsApp(
+                    view = view,
+                    x = downX,
+                    y = downY
+                )
+            }
+        }
 
         view.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = event.rawX
                     downY = event.rawY
-                    startY = params.y
-                    moved = false
                     downAt = System.currentTimeMillis()
+                    moved = false
+                    longDelegated = false
+                    main.postDelayed(
+                        delegateLongPress,
+                        longPressDelegateAt
+                    )
                     true
                 }
 
@@ -616,42 +256,37 @@ class WhatsAppReaderService : AccessibilityService() {
                         abs(event.rawY - downY) > slop
                     ) {
                         moved = true
+                        main.removeCallbacks(delegateLongPress)
+                    }
+                    true
+                }
+
+                MotionEvent.ACTION_UP -> {
+                    main.removeCallbacks(delegateLongPress)
+
+                    if (longDelegated) {
+                        return@setOnTouchListener true
                     }
 
                     if (moved) {
-                        val maxY =
-                            resources.displayMetrics.heightPixels -
-                                params.height -
-                                dp(24)
-
-                        params.y = (
-                            startY +
-                                (event.rawY - downY).toInt()
-                            ).coerceIn(
-                            dp(24),
-                            maxY
+                        delegateSwipeToWhatsApp(
+                            startX = downX,
+                            startY = downY,
+                            endX = event.rawX,
+                            endY = event.rawY,
+                            durationMs = (
+                                System.currentTimeMillis() - downAt
+                                ).coerceIn(80L, 650L)
                         )
-
-                        try {
-                            windowManager?.updateViewLayout(
-                                view,
-                                params
-                            )
-                        } catch (_: Throwable) {
-                        }
+                    } else {
+                        onMessageTap(candidate)
                     }
 
                     true
                 }
 
-                MotionEvent.ACTION_UP -> {
-                    if (!moved) {
-                        val held =
-                            System.currentTimeMillis() - downAt
-                        readLegacyNearest(
-                            fast = held >= 560L
-                        )
-                    }
+                MotionEvent.ACTION_CANCEL -> {
+                    main.removeCallbacks(delegateLongPress)
                     true
                 }
 
@@ -660,135 +295,301 @@ class WhatsAppReaderService : AccessibilityService() {
         }
     }
 
-    private fun readLegacyNearest(fast: Boolean) {
-        val root = rootInActiveWindow ?: return
+    private fun onMessageTap(
+        candidate: MessageExtractor.Candidate
+    ) {
+        val key = candidate.stableKey()
 
-        try {
-            val pkg = root.packageName?.toString().orEmpty()
-            if (pkg !in whatsappPackages) return
+        if (
+            currentMessageKey == key &&
+            NeuralSpeech.isSpeaking()
+        ) {
+            stopReading(190L)
+            return
+        }
 
-            val params = overlayParams ?: return
-            val targetY =
-                params.y + params.height / 2
+        NeuralSpeech.stop()
+        removeHighlight(immediate = true)
 
-            val candidate = MessageExtractor.nearest(
-                root,
-                targetY,
-                resources.displayMetrics.heightPixels,
-                resources.displayMetrics.density
-            ) ?: return
+        currentMessageKey = key
+        currentMessageText = candidate.text
 
-            val key = candidate.stableKey()
+        showHighlight(candidate.bubbleBounds)
 
-            if (
-                !fast &&
-                currentMessageKey == key &&
-                NeuralSpeech.isSpeaking()
-            ) {
-                stopReading()
-                return
-            }
-
-            stopReading()
-            currentMessageKey = key
-
-            NeuralSpeech.speak(
-                this,
-                candidate.text,
-                speed = if (fast) getLongPressSpeed() else 1.0f,
-                onComplete = {
+        NeuralSpeech.speak(
+            context = this,
+            rawText = candidate.text,
+            sid = VoiceSettings.getSid(this),
+            onComplete = {
+                main.post {
                     if (currentMessageKey == key) {
                         currentMessageKey = null
-                    }
-                },
-                onError = {
-                    if (currentMessageKey == key) {
-                        currentMessageKey = null
+                        currentMessageText = null
+                        fadeHighlight(360L)
                     }
                 }
-            )
-        } finally {
-            try {
-                root.recycle()
-            } catch (_: Throwable) {
+            },
+            onError = {
+                main.post {
+                    if (currentMessageKey == key) {
+                        currentMessageKey = null
+                        currentMessageText = null
+                        fadeHighlight(180L)
+                    }
+                }
             }
-        }
+        )
     }
 
-    private fun getLongPressSpeed(): Float {
-        return getSharedPreferences(
-            MainActivity.PREFS,
-            Context.MODE_PRIVATE
-        ).getFloat(
-            MainActivity.KEY_LONG_PRESS_SPEED,
-            MainActivity.DEFAULT_LONG_PRESS_SPEED
-        ).coerceIn(1.0f, 2.0f)
-    }
-
-    private fun stopReading() {
+    private fun stopReading(fadeMs: Long) {
         NeuralSpeech.stop()
         currentMessageKey = null
-    }
-
-    private fun showOverlay() {
-        if (visible) return
-
-        val view = overlayView ?: return
-        val params = overlayParams ?: return
-
+        currentMessageText = null
         main.post {
-            if (visible) return@post
-
-            try {
-                windowManager?.addView(
-                    view,
-                    params
-                )
-                visible = true
-
-                if (Build.VERSION.SDK_INT >= 24) {
-                    updateDirectOverlayBounds()
-                }
-            } catch (_: Throwable) {
-            }
+            fadeHighlight(fadeMs)
         }
     }
 
-    private fun hideOverlay() {
-        if (!visible) return
+    private fun showHighlight(bounds: Rect) {
+        val wm = windowManager ?: return
 
-        val view = overlayView ?: return
+        removeHighlight(immediate = true)
 
-        main.post {
-            if (!visible) return@post
+        val visual = Rect(bounds)
+        visual.inset(-dp(2), -dp(2))
 
-            try {
-                windowManager?.removeView(view)
-            } catch (_: Throwable) {
-            }
-
-            visible = false
+        val drawable = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(12).toFloat()
+            setColor(Color.argb(34, 65, 190, 255))
+            setStroke(
+                dp(3),
+                Color.rgb(45, 185, 255)
+            )
         }
-    }
 
-    private fun removeOverlay() {
-        val view = overlayView ?: return
+        val view = View(this).apply {
+            background = drawable
+            alpha = 1f
+        }
+
+        val params = WindowManager.LayoutParams(
+            visual.width(),
+            visual.height(),
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = visual.left
+            y = visual.top
+        }
 
         try {
-            if (visible) {
-                windowManager?.removeView(view)
+            wm.addView(view, params)
+            highlightView = view
+            highlightBounds = Rect(bounds)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun repositionActiveHighlight(
+        messages: List<MessageExtractor.Candidate>
+    ) {
+        val activeText = currentMessageText ?: return
+        val current = highlightView ?: return
+
+        val match = messages
+            .filter { it.text == activeText }
+            .minByOrNull { candidate ->
+                val old = highlightBounds
+                if (old == null) 0
+                else abs(candidate.bubbleBounds.top - old.top)
+            } ?: return
+
+        val old = highlightBounds
+        if (old == match.bubbleBounds) return
+
+        val visual = Rect(match.bubbleBounds)
+        visual.inset(-dp(2), -dp(2))
+
+        val params = current.layoutParams as? WindowManager.LayoutParams
+            ?: return
+
+        params.x = visual.left
+        params.y = visual.top
+        params.width = visual.width()
+        params.height = visual.height()
+
+        try {
+            windowManager?.updateViewLayout(current, params)
+            highlightBounds = Rect(match.bubbleBounds)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun fadeHighlight(durationMs: Long) {
+        val view = highlightView ?: return
+
+        view.animate()
+            .alpha(0f)
+            .setDuration(durationMs)
+            .withEndAction {
+                if (highlightView === view) {
+                    removeHighlight(immediate = true)
+                } else {
+                    try {
+                        windowManager?.removeView(view)
+                    } catch (_: Throwable) {
+                    }
+                }
             }
+            .start()
+    }
+
+    private fun removeHighlight(immediate: Boolean) {
+        val view = highlightView ?: return
+
+        if (!immediate) {
+            fadeHighlight(220L)
+            return
+        }
+
+        try {
+            view.animate().cancel()
+            windowManager?.removeView(view)
         } catch (_: Throwable) {
         }
 
-        visible = false
-        overlayView = null
-        overlayParams = null
+        highlightView = null
+        highlightBounds = null
+    }
+
+    private fun delegateLongPressToWhatsApp(
+        view: View,
+        x: Float,
+        y: Float
+    ) {
+        // Long press belongs entirely to WhatsApp. Remove only the touched
+        // target, inject the native hold, then rebuild the tiny target regions.
+        removeTargetView(view)
+
+        main.postDelayed({
+            dispatchPathGesture(
+                startX = x,
+                startY = y,
+                endX = x + 0.1f,
+                endY = y + 0.1f,
+                durationMs = 520L,
+                after = {
+                    scheduleRefresh(120L)
+                }
+            )
+        }, 20L)
+    }
+
+    private fun delegateSwipeToWhatsApp(
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+        durationMs: Long
+    ) {
+        // This path is used only when a swipe starts directly on message text.
+        // Everywhere else WhatsApp receives touch normally.
+        clearTargets()
+
+        main.postDelayed({
+            dispatchPathGesture(
+                startX = startX,
+                startY = startY,
+                endX = endX,
+                endY = endY,
+                durationMs = durationMs,
+                after = {
+                    scheduleRefresh(90L)
+                }
+            )
+        }, 16L)
+    }
+
+    private fun dispatchPathGesture(
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+        durationMs: Long,
+        after: () -> Unit
+    ) {
+        val path = Path().apply {
+            moveTo(startX, startY)
+            lineTo(endX, endY)
+        }
+
+        val gesture = GestureDescription.Builder()
+            .addStroke(
+                GestureDescription.StrokeDescription(
+                    path,
+                    0L,
+                    durationMs.coerceIn(60L, 700L)
+                )
+            )
+            .build()
+
+        val callback = object : GestureResultCallback() {
+            override fun onCompleted(
+                gestureDescription: GestureDescription?
+            ) {
+                after()
+            }
+
+            override fun onCancelled(
+                gestureDescription: GestureDescription?
+            ) {
+                after()
+            }
+        }
+
+        if (!dispatchGesture(gesture, callback, main)) {
+            after()
+        }
+    }
+
+    private fun removeTargetView(view: View) {
+        val iterator = targets.iterator()
+
+        while (iterator.hasNext()) {
+            val target = iterator.next()
+            if (target.view === view) {
+                try {
+                    windowManager?.removeView(target.view)
+                } catch (_: Throwable) {
+                }
+                iterator.remove()
+                break
+            }
+        }
+
+        targetSignature = ""
+    }
+
+    private fun clearTargets(
+        resetSignature: Boolean = true
+    ) {
+        for (target in targets) {
+            try {
+                windowManager?.removeView(target.view)
+            } catch (_: Throwable) {
+            }
+        }
+
+        targets.clear()
+        if (resetSignature) targetSignature = ""
     }
 
     private fun dp(value: Int): Int =
-        (
-            value *
-                resources.displayMetrics.density
-            ).toInt()
+        (value * resources.displayMetrics.density).toInt()
 }
