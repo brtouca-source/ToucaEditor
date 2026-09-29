@@ -1,4 +1,4 @@
-name: Build Leitor Facil v3.2 Release
+name: Build Leitor Facil v3.2.1 Release
 
 on:
   push:
@@ -76,11 +76,11 @@ jobs:
           set -euxo pipefail
           cd LeitorFacil
           gradle --no-daemon :app:assembleRelease
-          cp app/build/outputs/apk/release/app-release-unsigned.apk ../LeitorFacil-v3.2-Unsigned.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk ../LeitorFacil-v3.2.1-Unsigned.apk
           cd ..
-          unzip -l LeitorFacil-v3.2-Unsigned.apk | grep "lib/armeabi-v7a/"
-          unzip -l LeitorFacil-v3.2-Unsigned.apk | grep "lib/arm64-v8a/"
-          unzip -l LeitorFacil-v3.2-Unsigned.apk | grep "assets/model/voice.bin"
+          unzip -l LeitorFacil-v3.2.1-Unsigned.apk | grep "lib/armeabi-v7a/"
+          unzip -l LeitorFacil-v3.2.1-Unsigned.apk | grep "lib/arm64-v8a/"
+          unzip -l LeitorFacil-v3.2.1-Unsigned.apk | grep "assets/model/voice.bin"
 
       - name: Sign and verify release APK
         shell: bash
@@ -92,18 +92,18 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/$BUILD_TOOLS/zipalign"
           APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
 
-          "$ZIPALIGN" -f -p 4             LeitorFacil-v3.2-Unsigned.apk             LeitorFacil-v3.2-Aligned.apk
+          "$ZIPALIGN" -f -p 4             LeitorFacil-v3.2.1-Unsigned.apk             LeitorFacil-v3.2.1-Aligned.apk
 
-          "$APKSIGNER" sign             --ks "$SIGN_DIR/release.jks"             --ks-key-alias leitorfacil             --ks-pass "pass:$PASSWORD"             --key-pass "pass:$PASSWORD"             --v1-signing-enabled true             --v2-signing-enabled true             --v3-signing-enabled true             --out LeitorFacil-v3.2-Signed.apk             LeitorFacil-v3.2-Aligned.apk
+          "$APKSIGNER" sign             --ks "$SIGN_DIR/release.jks"             --ks-key-alias leitorfacil             --ks-pass "pass:$PASSWORD"             --key-pass "pass:$PASSWORD"             --v1-signing-enabled true             --v2-signing-enabled true             --v3-signing-enabled true             --out LeitorFacil-v3.2.1-CleanInstall-Signed.apk             LeitorFacil-v3.2.1-Aligned.apk
 
-          "$APKSIGNER" verify --verbose --print-certs             LeitorFacil-v3.2-Signed.apk | tee signing-verification.txt
-          sha256sum LeitorFacil-v3.2-Signed.apk             | tee LeitorFacil-v3.2-Signed.apk.sha256
+          "$APKSIGNER" verify --verbose --print-certs             LeitorFacil-v3.2.1-CleanInstall-Signed.apk | tee signing-verification.txt
+          sha256sum LeitorFacil-v3.2.1-CleanInstall-Signed.apk             | tee LeitorFacil-v3.2.1-CleanInstall-Signed.apk.sha256
 
       - uses: actions/upload-artifact@v4
         with:
-          name: LeitorFacil-v3.2-Signed
+          name: LeitorFacil-v3.2.1-CleanInstall-Signed
           path: |
-            LeitorFacil-v3.2-Signed.apk
-            LeitorFacil-v3.2-Signed.apk.sha256
+            LeitorFacil-v3.2.1-CleanInstall-Signed.apk
+            LeitorFacil-v3.2.1-CleanInstall-Signed.apk.sha256
             signing-verification.txt
           if-no-files-found: error
