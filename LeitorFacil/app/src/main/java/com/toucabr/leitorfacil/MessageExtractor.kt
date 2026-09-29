@@ -2,21 +2,29 @@ package com.toucabr.leitorfacil
 
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
-import kotlin.math.abs
 
 object MessageExtractor {
     data class Candidate(
         val text: String,
-        val bounds: Rect,
-        val fromDescription: Boolean
+        val textBounds: Rect,
+        val bubbleBounds: Rect
     ) {
         fun stableKey(): String =
-            text + "|" + bounds.left + "|" + bounds.top + "|" + bounds.right + "|" + bounds.bottom
+            text + "|" +
+                bubbleBounds.left + "|" +
+                bubbleBounds.top + "|" +
+                bubbleBounds.right + "|" +
+                bubbleBounds.bottom
     }
 
-    private val timeRegex = Regex("^(?:[01]?\\d|2[0-3]):[0-5]\\d(?:\\s?[AaPp][Mm])?$")
+    private val timeRegex = Regex(
+        "^(?:[01]?\\d|2[0-3]):[0-5]\\d(?:\\s?[AaPp][Mm])?$"
+    )
+
     private val dateRegex = Regex(
-        "^(hoje|ontem|segunda(?:-feira)?|terça(?:-feira)?|quarta(?:-feira)?|quinta(?:-feira)?|sexta(?:-feira)?|sábado|domingo|\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?)$",
+        "^(hoje|ontem|segunda(?:-feira)?|terça(?:-feira)?|quarta(?:-feira)?|" +
+            "quinta(?:-feira)?|sexta(?:-feira)?|sábado|domingo|" +
+            "\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?)$",
         RegexOption.IGNORE_CASE
     )
 
@@ -25,93 +33,39 @@ object MessageExtractor {
         "pesquisar", "voltar", "mais opções", "enviar", "anexar",
         "câmera", "camera", "mensagem", "digite uma mensagem", "online",
         "chamada de voz", "chamada de vídeo", "videochamada", "nova conversa",
-        "lida", "entregue", "enviando", "silenciado", "fixada"
+        "lida", "entregue", "enviando", "silenciado", "fixada",
+        "responder", "encaminhar", "copiar", "apagar", "favoritar"
     )
 
-    fun atPoint(
+    fun visibleMessages(
         root: AccessibilityNodeInfo,
-        x: Int,
-        y: Int,
-        screenHeight: Int,
-        density: Float
-    ): Candidate? {
-        val all = collectCandidates(root, screenHeight, density)
-        if (all.isEmpty()) return null
-
-        val pad = (18f * density).toInt()
-        val direct = all.filter {
-            val r = Rect(it.bounds)
-            r.inset(-pad, -pad)
-            r.contains(x, y)
-        }
-
-        if (direct.isNotEmpty()) {
-            return direct.minByOrNull {
-                val area = it.bounds.width().coerceAtLeast(1) * it.bounds.height().coerceAtLeast(1)
-                area + if (it.fromDescription) 100000 else 0
-            }
-        }
-
-        val verticalTolerance = (46f * density).toInt()
-        val horizontalTolerance = (90f * density).toInt()
-
-        return all
-            .map { candidate ->
-                val r = candidate.bounds
-                val dy = when {
-                    y < r.top -> r.top - y
-                    y > r.bottom -> y - r.bottom
-                    else -> 0
-                }
-                val dx = when {
-                    x < r.left -> r.left - x
-                    x > r.right -> x - r.right
-                    else -> 0
-                }
-                Triple(candidate, dx, dy)
-            }
-            .filter { (_, dx, dy) -> dy <= verticalTolerance && dx <= horizontalTolerance }
-            .minByOrNull { (candidate, dx, dy) ->
-                dy * 10 + dx + if (candidate.fromDescription) (30f * density).toInt() else 0
-            }
-            ?.first
-    }
-
-    fun nearest(
-        root: AccessibilityNodeInfo,
-        targetY: Int,
-        screenHeight: Int,
-        density: Float
-    ): Candidate? {
-        val all = collectCandidates(root, screenHeight, density)
-        if (all.isEmpty()) return null
-        val maxDistance = (260 * density).toInt()
-        val nearest = all.minByOrNull {
-            val center = (it.bounds.top + it.bounds.bottom) / 2
-            var score = abs(center - targetY)
-            if (it.fromDescription) score += (30 * density).toInt()
-            score
-        }
-        if (nearest != null) {
-            val center = (nearest.bounds.top + nearest.bounds.bottom) / 2
-            if (abs(center - targetY) <= maxDistance) return nearest
-        }
-        return all.maxByOrNull { it.bounds.bottom }
-    }
-
-    private fun collectCandidates(
-        root: AccessibilityNodeInfo,
+        screenWidth: Int,
         screenHeight: Int,
         density: Float
     ): List<Candidate> {
         val out = ArrayList<Candidate>()
-        collect(root, out, screenHeight, density)
-        return out.distinctBy { it.stableKey() }
+        collect(
+            node = root,
+            out = out,
+            screenWidth = screenWidth,
+            screenHeight = screenHeight,
+            density = density
+        )
+
+        return out
+            .distinctBy { it.stableKey() }
+            .filter {
+                it.textBounds.width() > 0 &&
+                    it.textBounds.height() > 0 &&
+                    it.bubbleBounds.width() > 0 &&
+                    it.bubbleBounds.height() > 0
+            }
     }
 
     private fun collect(
         node: AccessibilityNodeInfo?,
         out: MutableList<Candidate>,
+        screenWidth: Int,
         screenHeight: Int,
         density: Float
     ) {
@@ -121,8 +75,8 @@ object MessageExtractor {
             val rect = Rect()
             node.getBoundsInScreen(rect)
 
-            val headerCut = (76 * density).toInt()
-            val bottomCut = screenHeight - (70 * density).toInt()
+            val headerCut = (72 * density).toInt()
+            val bottomCut = screenHeight - (68 * density).toInt()
 
             if (
                 rect.bottom > headerCut &&
@@ -132,13 +86,33 @@ object MessageExtractor {
             ) {
                 val text = node.text?.toString()?.trim().orEmpty()
 
-                if (isUseful(text)) {
-                    out.add(Candidate(text, Rect(rect), false))
-                } else if (text.isBlank()) {
-                    val desc = node.contentDescription?.toString()?.trim().orEmpty()
-                    val mapped = mapDescription(desc)
-                    if (isUseful(mapped)) {
-                        out.add(Candidate(mapped, Rect(rect), true))
+                if (isUsefulText(text)) {
+                    val bubble = findBubbleBounds(
+                        node,
+                        rect,
+                        screenWidth,
+                        screenHeight,
+                        density
+                    )
+
+                    val safeBubble = Rect(
+                        bubble.left.coerceAtLeast(0),
+                        bubble.top.coerceAtLeast(headerCut),
+                        bubble.right.coerceAtMost(screenWidth),
+                        bubble.bottom.coerceAtMost(bottomCut)
+                    )
+
+                    if (
+                        safeBubble.width() > 0 &&
+                        safeBubble.height() > 0
+                    ) {
+                        out.add(
+                            Candidate(
+                                text = text,
+                                textBounds = Rect(rect),
+                                bubbleBounds = safeBubble
+                            )
+                        )
                     }
                 }
             }
@@ -146,7 +120,13 @@ object MessageExtractor {
             for (i in 0 until node.childCount) {
                 val child = node.getChild(i)
                 if (child != null) {
-                    collect(child, out, screenHeight, density)
+                    collect(
+                        child,
+                        out,
+                        screenWidth,
+                        screenHeight,
+                        density
+                    )
                     try {
                         child.recycle()
                     } catch (_: Throwable) {
@@ -157,42 +137,87 @@ object MessageExtractor {
         }
     }
 
-    private fun isUseful(value: String): Boolean {
-        val s = value.trim()
-        if (s.isBlank() || s.length > 1200) return false
+    private fun findBubbleBounds(
+        node: AccessibilityNodeInfo,
+        textBounds: Rect,
+        screenWidth: Int,
+        screenHeight: Int,
+        density: Float
+    ): Rect {
+        var best = Rect(textBounds)
+        var current: AccessibilityNodeInfo? = null
 
-        val low = s.lowercase()
+        try {
+            current = node.parent
+            var depth = 0
+
+            while (current != null && depth < 5) {
+                val bounds = Rect()
+                current.getBoundsInScreen(bounds)
+
+                val fullWidth = bounds.width() >= (screenWidth * 0.93f).toInt()
+                val tooTall = bounds.height() >= (screenHeight * 0.62f).toInt()
+                val containsText = bounds.contains(textBounds)
+
+                if (!containsText || fullWidth || tooTall) {
+                    break
+                }
+
+                val horizontalPadding =
+                    bounds.width() - textBounds.width()
+                val verticalPadding =
+                    bounds.height() - textBounds.height()
+
+                val looksLikeBubble =
+                    horizontalPadding <= (96 * density).toInt() &&
+                    verticalPadding <= (120 * density).toInt() &&
+                    bounds.width() <= (screenWidth * 0.90f).toInt()
+
+                if (looksLikeBubble) {
+                    best = Rect(bounds)
+                }
+
+                val next = current.parent
+                try {
+                    current.recycle()
+                } catch (_: Throwable) {
+                }
+                current = next
+                depth++
+            }
+        } catch (_: Throwable) {
+        } finally {
+            try {
+                current?.recycle()
+            } catch (_: Throwable) {
+            }
+        }
+
+        // If WhatsApp exposes only the TextView, add a small visual/touch margin.
+        if (best == textBounds) {
+            val h = (8 * density).toInt()
+            val v = (7 * density).toInt()
+            best.inset(-h, -v)
+        }
+
+        return best
+    }
+
+    private fun isUsefulText(value: String): Boolean {
+        val text = value.trim()
+        if (text.isBlank() || text.length > 20_000) return false
+        if (PortugueseNormalizer.isPureUrl(text)) return false
+
+        val low = text.lowercase()
         if (low in junkExact) return false
-        if (timeRegex.matches(s) || dateRegex.matches(s)) return false
+        if (timeRegex.matches(text) || dateRegex.matches(text)) return false
         if (low.startsWith("visto por último")) return false
         if (low.startsWith("toque e segure")) return false
         if (low.contains("criptografia de ponta a ponta")) return false
         if (low == "1 mensagem não lida" || low.endsWith(" mensagens não lidas")) return false
         if (low.endsWith(" não lida") || low.endsWith(" não lidas")) return false
-        if (s.all { it.isDigit() || it in " .,:/-" }) return false
+        if (text.all { it.isDigit() || it in " .,:/-" }) return false
 
         return true
-    }
-
-    private fun mapDescription(desc: String): String {
-        if (desc.isBlank()) return ""
-
-        val low = desc.lowercase()
-        return when {
-            low.contains("mensagem de voz") || low.contains("áudio") || low.contains("audio") ->
-                "Mensagem de áudio"
-            low.contains("foto") || low.contains("imagem") ->
-                "Imagem"
-            low.contains("vídeo") || low.contains("video") ->
-                "Vídeo"
-            low.contains("figurinha") ->
-                "Figurinha"
-            low.contains("gif") ->
-                "GIF"
-            low.contains("documento") ->
-                "Documento"
-            else ->
-                desc
-        }
     }
 }
