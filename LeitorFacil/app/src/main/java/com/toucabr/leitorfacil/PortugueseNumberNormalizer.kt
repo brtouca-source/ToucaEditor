@@ -1,8 +1,5 @@
 package com.toucabr.leitorfacil
 
-import android.os.Build
-import java.util.Locale
-
 object PortugueseNumberNormalizer {
     private val sequence = Regex("(?<!\\d)(?:\\d(?:\\s*[-,]\\s*|\\s+)){2,}\\d(?!\\d)")
     private val integer = Regex("(?<![\\p{L}\\p{N}_])\\d{1,15}(?![\\p{L}\\p{N}_])")
@@ -42,17 +39,6 @@ object PortugueseNumberNormalizer {
 
     private fun integerToWords(raw: String): String {
         val value = raw.toLongOrNull() ?: return raw
-        if (Build.VERSION.SDK_INT >= 24) {
-            return try {
-                val formatter = android.icu.text.RuleBasedNumberFormat(
-                    Locale("pt", "BR"),
-                    android.icu.text.RuleBasedNumberFormat.SPELLOUT
-                )
-                formatter.format(value)
-            } catch (_: Throwable) {
-                raw
-            }
-        }
         return fallback(value)
     }
 
