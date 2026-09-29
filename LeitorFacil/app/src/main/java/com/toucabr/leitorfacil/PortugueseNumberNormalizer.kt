@@ -58,11 +58,24 @@ object PortugueseNumberNormalizer {
     }
 
     private fun rawNumberFallback(value: Long): String {
-        val s = value.toString()
-        return if (s.length <= 3) {
-            s
-        } else {
-            s
+        if (value < 100L) {
+            val tens = when ((value / 10L).toInt()) {
+                2 -> "vinte"; 3 -> "trinta"; 4 -> "quarenta"; 5 -> "cinquenta"
+                6 -> "sessenta"; 7 -> "setenta"; 8 -> "oitenta"; else -> "noventa"
+            }
+            val rest = (value % 10L).toInt()
+            return if (rest == 0) tens else tens + " e " + digitWords[rest]
         }
+        if (value < 1000L) {
+            if (value == 100L) return "cem"
+            val hundreds = when ((value / 100L).toInt()) {
+                1 -> "cento"; 2 -> "duzentos"; 3 -> "trezentos"; 4 -> "quatrocentos"
+                5 -> "quinhentos"; 6 -> "seiscentos"; 7 -> "setecentos"
+                8 -> "oitocentos"; else -> "novecentos"
+            }
+            val rest = value % 100L
+            return if (rest == 0L) hundreds else hundreds + " e " + fallback(rest)
+        }
+        return value.toString()
     }
 }
