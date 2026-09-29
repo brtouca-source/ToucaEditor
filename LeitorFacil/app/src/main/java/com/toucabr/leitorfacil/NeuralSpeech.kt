@@ -6,6 +6,8 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
@@ -24,6 +26,19 @@ object NeuralSpeech {
     private val executor = Executors.newSingleThreadExecutor()
     private val generation = AtomicInteger(0)
     private val speaking = AtomicBoolean(false)
+    private val releaseHandler = Handler(Looper.getMainLooper())
+    private const val IDLE_RELEASE_MS = 60_000L
+    private val releaseRunnable = Runnable {
+        executor.execute {
+            if (!speaking.get()) {
+                try {
+                    tts?.release()
+                } catch (_: Throwable) {
+                }
+                tts = null
+            }
+        }
+    }
 
     @Volatile
     private var tts: OfflineTts? = null
@@ -75,6 +90,7 @@ object NeuralSpeech {
         val normalized = PortugueseNormalizer.normalize(rawText)
         if (normalized.isBlank()) return
 
+        releaseHandler.removeCallbacks(releaseRunnable)
         val myGeneration = generation.incrementAndGet()
         speaking.set(true)
         stopTrackOnly()
@@ -157,6 +173,7 @@ object NeuralSpeech {
 
                 if (generation.get() == myGeneration) {
                     speaking.set(false)
+                    scheduleIdleRelease()
                     onComplete?.invoke()
                 }
             } catch (t: Throwable) {
@@ -165,6 +182,7 @@ object NeuralSpeech {
 
                 if (generation.get() == myGeneration) {
                     speaking.set(false)
+                    scheduleIdleRelease()
                     onError?.invoke(t)
                 }
             }
@@ -177,6 +195,12 @@ object NeuralSpeech {
         generation.incrementAndGet()
         speaking.set(false)
         stopTrackOnly()
+        scheduleIdleRelease()
+    }
+
+    private fun scheduleIdleRelease() {
+        releaseHandler.removeCallbacks(releaseRunnable)
+        releaseHandler.postDelayed(releaseRunnable, IDLE_RELEASE_MS)
     }
 
     private fun createEngine(context: Context): OfflineTts {
