@@ -76,6 +76,23 @@ object PortugueseNumberNormalizer {
             val rest = value % 100L
             return if (rest == 0L) hundreds else hundreds + " e " + fallback(rest)
         }
+        if (value < 1_000_000L) return scaled(value, 1_000L, "mil", "mil")
+        if (value < 1_000_000_000L) return scaled(value, 1_000_000L, "milhão", "milhões")
+        if (value < 1_000_000_000_000L) return scaled(value, 1_000_000_000L, "bilhão", "bilhões")
+        if (value < 1_000_000_000_000_000L) return scaled(value, 1_000_000_000_000L, "trilhão", "trilhões")
         return value.toString()
+    }
+
+    private fun scaled(value: Long, base: Long, singular: String, plural: String): String {
+        val high = value / base
+        val rest = value % base
+        val prefix = when {
+            base == 1_000L && high == 1L -> "mil"
+            high == 1L -> "um " + singular
+            else -> fallback(high) + " " + plural
+        }
+        if (rest == 0L) return prefix
+        val connector = if (rest < 100L || rest % 100L == 0L) " e " else " "
+        return prefix + connector + fallback(rest)
     }
 }
