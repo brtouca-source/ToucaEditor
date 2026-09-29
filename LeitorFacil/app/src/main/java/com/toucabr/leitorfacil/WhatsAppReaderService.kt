@@ -50,11 +50,8 @@ class WhatsAppReaderService : AccessibilityService() {
         super.onServiceConnected()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
-        // Prepare the local model silently and outside the UI thread.
-        main.postDelayed({
-            NeuralSpeech.warmUp(this)
-        }, 900L)
-
+        // Keep the service lightweight. The neural model is loaded only after
+        // the user taps a message (or explicitly tests a voice in the app).
         scheduleRefresh(100L)
     }
 
