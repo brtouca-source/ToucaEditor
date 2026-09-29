@@ -62,6 +62,7 @@ object NeuralSpeech {
         val appContext = context.applicationContext
         executor.execute {
             try {
+                cleanupObsoleteStorage(appContext)
                 ensureModel(appContext)
             } catch (_: Throwable) {
             }
@@ -563,6 +564,28 @@ object NeuralSpeech {
         }
 
         return result
+    }
+
+    private fun cleanupObsoleteStorage(context: Context) {
+        val obsolete = listOf(
+            "voice-model",
+            "piper-model",
+            "supertonic3-int8-v0"
+        )
+
+        for (name in obsolete) {
+            try {
+                File(context.filesDir, name).deleteRecursively()
+            } catch (_: Throwable) {
+            }
+        }
+
+        try {
+            context.cacheDir.listFiles()?.forEach { file ->
+                file.deleteRecursively()
+            }
+        } catch (_: Throwable) {
+        }
     }
 
     private fun ensureModel(context: Context): File {
