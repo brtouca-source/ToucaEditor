@@ -88,7 +88,8 @@ object PortugueseNormalizer {
             }
         }
 
-        return improveProsody(rebuilt.toString())
+        val withNumbers = PortugueseNumberNormalizer.normalize(rebuilt.toString())
+        return improveProsody(withNumbers)
     }
 
     private fun improveProsody(raw: String): String {
