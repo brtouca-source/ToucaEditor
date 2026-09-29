@@ -34,6 +34,10 @@ android {
         jvmTarget = "1.8"
     }
 
+    androidResources {
+        noCompress += listOf("onnx", "bin", "json")
+    }
+
     packaging {
         jniLibs {
             useLegacyPackaging = true
