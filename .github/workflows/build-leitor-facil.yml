@@ -3,6 +3,8 @@ name: Build Leitor Facil J7
 on:
   push:
     branches: ["leitor-facil-j7"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
