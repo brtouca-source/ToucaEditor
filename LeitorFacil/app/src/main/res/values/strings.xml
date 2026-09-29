@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Leitor Fácil</string>
+    <string name="accessibility_description">Mostra um botão de alto-falante sobre o WhatsApp e lê em voz alta a mensagem próxima ao botão. O processamento de voz é feito no próprio celular.</string>
+    <string name="accessibility_summary">Ler mensagens do WhatsApp em voz alta</string>
+</resources>
