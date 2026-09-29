@@ -23,6 +23,26 @@ jobs:
         with:
           gradle-version: "8.2"
 
+      - name: Restore stable Leitor Fácil signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/leitorfacil-signing
+          key: leitor-facil-release-signing-v1
+
+      - name: Ensure private release signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          SIGN_DIR="$HOME/.android/leitorfacil-signing"
+          mkdir -p "$SIGN_DIR"
+          if [ ! -f "$SIGN_DIR/release.jks" ]; then
+            PASSWORD="$(openssl rand -hex 24)"
+            printf '%s' "$PASSWORD" > "$SIGN_DIR/password.txt"
+            chmod 600 "$SIGN_DIR/password.txt"
+            keytool -genkeypair -noprompt               -keystore "$SIGN_DIR/release.jks"               -storepass "$PASSWORD"               -keypass "$PASSWORD"               -alias leitorfacil               -dname "CN=Leitor Facil,OU=ToucaBR,O=ToucaBR,C=BR"               -keyalg RSA -keysize 4096 -sigalg SHA256withRSA -validity 10950
+            chmod 600 "$SIGN_DIR/release.jks"
+          fi
+
       - name: Download Supertonic 3 INT8 offline voice model
         shell: bash
         run: |
@@ -61,10 +81,29 @@ jobs:
           unzip -l LeitorFacil-v3.2-Unsigned.apk | grep "lib/armeabi-v7a/"
           unzip -l LeitorFacil-v3.2-Unsigned.apk | grep "lib/arm64-v8a/"
           unzip -l LeitorFacil-v3.2-Unsigned.apk | grep "assets/model/voice.bin"
-          ls -lh LeitorFacil-v3.2-Unsigned.apk
+
+      - name: Sign and verify release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SIGN_DIR="$HOME/.android/leitorfacil-signing"
+          PASSWORD="$(cat "$SIGN_DIR/password.txt")"
+          BUILD_TOOLS="$(ls -1 "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          ZIPALIGN="$ANDROID_HOME/build-tools/$BUILD_TOOLS/zipalign"
+          APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
+
+          "$ZIPALIGN" -f -p 4             LeitorFacil-v3.2-Unsigned.apk             LeitorFacil-v3.2-Aligned.apk
+
+          "$APKSIGNER" sign             --ks "$SIGN_DIR/release.jks"             --ks-key-alias leitorfacil             --ks-pass "pass:$PASSWORD"             --key-pass "pass:$PASSWORD"             --v1-signing-enabled true             --v2-signing-enabled true             --v3-signing-enabled true             --out LeitorFacil-v3.2-Signed.apk             LeitorFacil-v3.2-Aligned.apk
+
+          "$APKSIGNER" verify --verbose --print-certs             LeitorFacil-v3.2-Signed.apk | tee signing-verification.txt
+          sha256sum LeitorFacil-v3.2-Signed.apk             | tee LeitorFacil-v3.2-Signed.apk.sha256
 
       - uses: actions/upload-artifact@v4
         with:
-          name: LeitorFacil-v3.2-Unsigned
-          path: LeitorFacil-v3.2-Unsigned.apk
+          name: LeitorFacil-v3.2-Signed
+          path: |
+            LeitorFacil-v3.2-Signed.apk
+            LeitorFacil-v3.2-Signed.apk.sha256
+            signing-verification.txt
           if-no-files-found: error
