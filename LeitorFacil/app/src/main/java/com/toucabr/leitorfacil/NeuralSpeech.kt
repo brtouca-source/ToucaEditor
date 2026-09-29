@@ -1,16 +1,20 @@
 package com.toucabr.leitorfacil
 
+import android.app.ActivityManager
 import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.os.Build
 import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig
 import java.io.File
 import java.io.FileOutputStream
+import java.text.BreakIterator
+import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -21,9 +25,14 @@ object NeuralSpeech {
     private val generation = AtomicInteger(0)
     private val speaking = AtomicBoolean(false)
 
-    @Volatile private var tts: OfflineTts? = null
-    @Volatile private var initializing = false
-    @Volatile private var currentTrack: AudioTrack? = null
+    @Volatile
+    private var tts: OfflineTts? = null
+
+    @Volatile
+    private var initializing = false
+
+    @Volatile
+    private var currentTrack: AudioTrack? = null
 
     fun warmUp(
         context: Context,
@@ -59,19 +68,19 @@ object NeuralSpeech {
     fun speak(
         context: Context,
         rawText: String,
-        speed: Float = 1.0f,
+        sid: Int = VoiceSettings.getSid(context),
         onComplete: (() -> Unit)? = null,
         onError: ((Throwable) -> Unit)? = null
     ) {
-        val text = normalize(rawText)
-        if (text.isBlank()) return
+        val normalized = PortugueseNormalizer.normalize(rawText)
+        if (normalized.isBlank()) return
 
-        val requestedSpeed = speed.coerceIn(0.8f, 2.0f)
         val myGeneration = generation.incrementAndGet()
         speaking.set(true)
-        stopTrack()
+        stopTrackOnly()
 
         executor.execute {
+            var track: AudioTrack? = null
             try {
                 if (tts == null) {
                     tts = createEngine(context.applicationContext)
@@ -87,70 +96,73 @@ object NeuralSpeech {
                     AudioFormat.ENCODING_PCM_16BIT
                 )
 
-                val track = AudioTrack(
+                track = AudioTrack(
                     AudioManager.STREAM_MUSIC,
                     sampleRate,
                     AudioFormat.CHANNEL_OUT_MONO,
                     AudioFormat.ENCODING_PCM_16BIT,
-                    max(minBuffer, 8192),
+                    max(minBuffer * 2, 16384),
                     AudioTrack.MODE_STREAM
                 )
 
                 currentTrack = track
                 track.play()
 
+                var framesWritten = 0L
                 val config = GenerationConfig(
-                    silenceScale = 0.16f,
-                    speed = requestedSpeed,
-                    sid = 0
+                    silenceScale = 0.10f,
+                    speed = 1.0f,
+                    sid = sid.coerceIn(0, 9),
+                    numSteps = qualitySteps(context),
+                    extra = mapOf("lang" to "pt")
                 )
 
-                engine.generateWithConfigAndCallback(text, config) { samples ->
-                    if (generation.get() != myGeneration) {
-                        0
-                    } else {
-                        val bytes = floatToPcm16(samples)
-                        var offset = 0
+                val chunks = splitForSpeech(normalized)
 
-                        while (
-                            offset < bytes.size &&
-                            generation.get() == myGeneration
-                        ) {
-                            val wrote = try {
-                                track.write(bytes, offset, bytes.size - offset)
-                            } catch (_: Throwable) {
-                                -1
-                            }
+                for (chunk in chunks) {
+                    if (generation.get() != myGeneration) break
 
-                            if (wrote <= 0) break
-                            offset += wrote
+                    engine.generateWithConfigAndCallback(
+                        text = chunk,
+                        config = config
+                    ) { samples ->
+                        if (generation.get() != myGeneration) {
+                            0
+                        } else {
+                            val writtenFrames = writeSamples(
+                                track = track,
+                                samples = samples,
+                                generationId = myGeneration
+                            )
+                            framesWritten += writtenFrames
+                            if (generation.get() == myGeneration) 1 else 0
                         }
-
-                        if (generation.get() == myGeneration) 1 else 0
                     }
                 }
 
                 if (generation.get() == myGeneration) {
-                    try {
-                        track.stop()
-                    } catch (_: Throwable) {
-                    }
+                    // Generation finishing does not mean the AudioTrack buffer has
+                    // reached the speaker. Wait for the actual playback head so the
+                    // final syllable is never clipped.
+                    drainTrack(
+                        track = track,
+                        totalFrames = framesWritten,
+                        sampleRate = sampleRate,
+                        generationId = myGeneration
+                    )
                 }
 
-                try {
-                    track.release()
-                } catch (_: Throwable) {
-                }
-
-                if (currentTrack === track) {
-                    currentTrack = null
-                }
+                safeRelease(track)
+                if (currentTrack === track) currentTrack = null
 
                 if (generation.get() == myGeneration) {
                     speaking.set(false)
                     onComplete?.invoke()
                 }
             } catch (t: Throwable) {
+                safeRelease(track)
+                if (currentTrack === track) currentTrack = null
+
                 if (generation.get() == myGeneration) {
                     speaking.set(false)
                     onError?.invoke(t)
@@ -164,118 +176,312 @@ object NeuralSpeech {
     fun stop() {
         generation.incrementAndGet()
         speaking.set(false)
-        stopTrack()
+        stopTrackOnly()
     }
 
     private fun createEngine(context: Context): OfflineTts {
         val dir = ensureModel(context)
 
-        val vits = OfflineTtsVitsModelConfig(
-            model = File(dir, "pt_BR-edresson-low.onnx").absolutePath,
-            tokens = File(dir, "tokens.txt").absolutePath,
-            dataDir = File(dir, "espeak-ng-data").absolutePath,
-            noiseScale = 0.55f,
-            noiseScaleW = 0.70f,
-            lengthScale = 1.0f
-        )
-
-        val model = OfflineTtsModelConfig(
-            vits = vits,
-            numThreads = 2,
-            debug = false,
-            provider = "cpu"
+        val supertonic = OfflineTtsSupertonicModelConfig(
+            durationPredictor = File(
+                dir,
+                "duration_predictor.int8.onnx"
+            ).absolutePath,
+            textEncoder = File(
+                dir,
+                "text_encoder.int8.onnx"
+            ).absolutePath,
+            vectorEstimator = File(
+                dir,
+                "vector_estimator.int8.onnx"
+            ).absolutePath,
+            vocoder = File(
+                dir,
+                "vocoder.int8.onnx"
+            ).absolutePath,
+            ttsJson = File(
+                dir,
+                "tts.json"
+            ).absolutePath,
+            unicodeIndexer = File(
+                dir,
+                "unicode_indexer.bin"
+            ).absolutePath,
+            voiceStyle = File(
+                dir,
+                "voice.bin"
+            ).absolutePath
         )
 
         return OfflineTts(
             config = OfflineTtsConfig(
-                model = model,
+                model = OfflineTtsModelConfig(
+                    supertonic = supertonic,
+                    numThreads = if (isLegacy32Bit()) 2 else 3,
+                    debug = false,
+                    provider = "cpu"
+                ),
                 maxNumSentences = 1,
-                silenceScale = 0.16f
+                silenceScale = 0.10f
             )
         )
     }
 
-    private fun stopTrack() {
+    private fun qualitySteps(context: Context): Int {
+        if (isLegacy32Bit()) return 5
+
+        val memoryClass = (
+            context.getSystemService(Context.ACTIVITY_SERVICE)
+                as? ActivityManager
+            )?.memoryClass ?: 256
+
+        return when {
+            memoryClass <= 192 -> 5
+            memoryClass <= 384 -> 6
+            else -> 8
+        }
+    }
+
+    private fun isLegacy32Bit(): Boolean {
+        return Build.VERSION.SDK_INT < 21 ||
+            Build.SUPPORTED_64_BIT_ABIS.isEmpty()
+    }
+
+    private fun writeSamples(
+        track: AudioTrack,
+        samples: FloatArray,
+        generationId: Int
+    ): Long {
+        if (samples.isEmpty()) return 0L
+
+        val bytes = floatToPcm16(samples)
+        var offset = 0
+
+        while (
+            offset < bytes.size &&
+            generation.get() == generationId
+        ) {
+            val wrote = try {
+                track.write(
+                    bytes,
+                    offset,
+                    bytes.size - offset
+                )
+            } catch (_: Throwable) {
+                -1
+            }
+
+            if (wrote <= 0) break
+            offset += wrote
+        }
+
+        return (offset / 2).toLong()
+    }
+
+    private fun drainTrack(
+        track: AudioTrack,
+        totalFrames: Long,
+        sampleRate: Int,
+        generationId: Int
+    ) {
+        if (totalFrames <= 0L) return
+
+        val startedAt = System.currentTimeMillis()
+        val initialHead = playbackHead(track)
+        val remaining = (totalFrames - initialHead).coerceAtLeast(0L)
+        val expectedMs = (
+            remaining * 1000L / sampleRate.coerceAtLeast(1)
+            ) + 1400L
+        val deadline = startedAt + expectedMs.coerceAtMost(20_000L)
+
+        while (
+            generation.get() == generationId &&
+            System.currentTimeMillis() < deadline
+        ) {
+            if (playbackHead(track) >= totalFrames) break
+            try {
+                Thread.sleep(12L)
+            } catch (_: InterruptedException) {
+                break
+            }
+        }
+
+        // Tiny hardware-buffer grace period after the reported playback head.
+        if (generation.get() == generationId) {
+            try {
+                Thread.sleep(35L)
+            } catch (_: InterruptedException) {
+            }
+        }
+    }
+
+    private fun playbackHead(track: AudioTrack): Long {
+        return try {
+            track.playbackHeadPosition.toLong() and 0xffffffffL
+        } catch (_: Throwable) {
+            0L
+        }
+    }
+
+    private fun stopTrackOnly() {
         val track = currentTrack
         currentTrack = null
+        safeRelease(track, immediate = true)
+    }
 
-        if (track != null) {
+    private fun safeRelease(
+        track: AudioTrack?,
+        immediate: Boolean = false
+    ) {
+        if (track == null) return
+
+        if (immediate) {
             try {
                 track.pause()
             } catch (_: Throwable) {
             }
-
             try {
                 track.flush()
             } catch (_: Throwable) {
             }
+        }
 
-            try {
-                track.stop()
-            } catch (_: Throwable) {
-            }
+        try {
+            track.stop()
+        } catch (_: Throwable) {
+        }
 
-            try {
-                track.release()
-            } catch (_: Throwable) {
-            }
+        try {
+            track.release()
+        } catch (_: Throwable) {
         }
     }
 
     private fun floatToPcm16(samples: FloatArray): ByteArray {
         val out = ByteArray(samples.size * 2)
-        var j = 0
+        var index = 0
 
         for (sample in samples) {
-            val s = (sample.coerceIn(-1f, 1f) * 32767f).toInt()
-            out[j++] = (s and 0xff).toByte()
-            out[j++] = ((s shr 8) and 0xff).toByte()
+            val value = (
+                sample.coerceIn(-1f, 1f) * 32767f
+                ).toInt()
+            out[index++] = (value and 0xff).toByte()
+            out[index++] = ((value shr 8) and 0xff).toByte()
         }
 
         return out
     }
 
-    private fun normalize(input: String): String {
-        var s = input.trim()
+    private fun splitForSpeech(
+        text: String,
+        maxChars: Int = 760
+    ): List<String> {
+        if (text.length <= maxChars) return listOf(text)
 
-        s = s.replace(
-            Regex("https?://\\S+", RegexOption.IGNORE_CASE),
-            " link "
-        )
+        val locale = Locale("pt", "BR")
+        val iterator = BreakIterator.getSentenceInstance(locale)
+        iterator.setText(text)
 
-        s = s
-            .replace("😂", " risada ")
-            .replace("🤣", " risada ")
-            .replace("❤️", " coração ")
-            .replace("❤", " coração ")
-            .replace("👍", " joinha ")
-            .replace("🙏", " mãos juntas ")
-            .replace("😍", " apaixonado ")
-            .replace("😭", " chorando ")
-            .replace("😊", " sorriso ")
-            .replace("🔥", " fogo ")
+        val sentences = ArrayList<String>()
+        var start = iterator.first()
+        var end = iterator.next()
 
-        s = s.replace(Regex("\\s+"), " ").trim()
-
-        return if (s.length > 600) {
-            s.take(600) + ". Mensagem muito longa."
-        } else {
-            s
+        while (end != BreakIterator.DONE) {
+            val sentence = text.substring(start, end).trim()
+            if (sentence.isNotBlank()) sentences.add(sentence)
+            start = end
+            end = iterator.next()
         }
+
+        if (sentences.isEmpty()) {
+            return splitOversized(text, maxChars)
+        }
+
+        val result = ArrayList<String>()
+        val current = StringBuilder()
+
+        for (sentence in sentences) {
+            if (sentence.length > maxChars) {
+                if (current.isNotEmpty()) {
+                    result.add(current.toString().trim())
+                    current.clear()
+                }
+                result.addAll(splitOversized(sentence, maxChars))
+                continue
+            }
+
+            if (
+                current.isNotEmpty() &&
+                current.length + 1 + sentence.length > maxChars
+            ) {
+                result.add(current.toString().trim())
+                current.clear()
+            }
+
+            if (current.isNotEmpty()) current.append(' ')
+            current.append(sentence)
+        }
+
+        if (current.isNotEmpty()) {
+            result.add(current.toString().trim())
+        }
+
+        return result.filter { it.isNotBlank() }
+    }
+
+    private fun splitOversized(
+        text: String,
+        maxChars: Int
+    ): List<String> {
+        val result = ArrayList<String>()
+        var remaining = text.trim()
+
+        while (remaining.length > maxChars) {
+            var cut = remaining.lastIndexOf(' ', maxChars)
+            if (cut < maxChars / 2) cut = maxChars
+
+            result.add(remaining.substring(0, cut).trim())
+            remaining = remaining.substring(cut).trim()
+        }
+
+        if (remaining.isNotBlank()) result.add(remaining)
+        return result
     }
 
     private fun ensureModel(context: Context): File {
-        val outDir = File(context.filesDir, "voice-model")
+        val outDir = File(
+            context.filesDir,
+            "supertonic3-int8-v1"
+        )
         val marker = File(outDir, ".ready")
 
         if (marker.exists()) return outDir
 
-        if (outDir.exists()) {
-            outDir.deleteRecursively()
+        if (outDir.exists()) outDir.deleteRecursively()
+        outDir.mkdirs()
+
+        copyAssetTree(
+            context = context,
+            assetPath = "model",
+            dest = outDir
+        )
+
+        val required = listOf(
+            "duration_predictor.int8.onnx",
+            "text_encoder.int8.onnx",
+            "vector_estimator.int8.onnx",
+            "vocoder.int8.onnx",
+            "tts.json",
+            "unicode_indexer.bin",
+            "voice.bin"
+        )
+
+        for (name in required) {
+            check(File(outDir, name).isFile) {
+                "Modelo de voz incompleto: $name"
+            }
         }
 
-        outDir.mkdirs()
-        copyAssetTree(context, "model", outDir)
         marker.writeText("ok")
         return outDir
     }
@@ -289,7 +495,6 @@ object NeuralSpeech {
 
         if (list.isEmpty()) {
             dest.parentFile?.mkdirs()
-
             context.assets.open(assetPath).use { input ->
                 FileOutputStream(dest).use { output ->
                     input.copyTo(output, 1024 * 256)
@@ -302,9 +507,9 @@ object NeuralSpeech {
 
         for (name in list) {
             copyAssetTree(
-                context,
-                assetPath + "/" + name,
-                File(dest, name)
+                context = context,
+                assetPath = assetPath + "/" + name,
+                dest = File(dest, name)
             )
         }
     }
