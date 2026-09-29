@@ -45,6 +45,13 @@ class WhatsAppReaderService : AccessibilityService() {
     private var currentMessageText: String? = null
 
     private val refreshPending = AtomicBoolean(false)
+    private var chatActive = false
+
+    private val warmConversationRunnable = Runnable {
+        if (chatActive) {
+            NeuralSpeech.enterConversation(this)
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -58,20 +65,36 @@ class WhatsAppReaderService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
+        val pkg = event.packageName?.toString().orEmpty()
+
+        // Ignore noisy accessibility traffic from every other app. We only
+        // perform a delayed state check when a different app becomes active,
+        // which keeps WhatsApp scrolling/input fluid.
+        if (pkg !in whatsappPackages) {
+            if (
+                event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+                event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+            ) {
+                scheduleRefresh(180L)
+            }
+            return
+        }
+
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
-                scheduleRefresh(90L)
+                scheduleRefresh(60L)
             }
 
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
-                scheduleRefresh(90L)
+                scheduleRefresh(110L)
             }
 
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                // WhatsApp can emit many content-change events in a burst.
-                // Coalesce them so the accessibility tree is not continuously walked.
-                scheduleRefresh(220L)
+                // WhatsApp emits many content-change events while typing,
+                // receiving status updates, and animating its UI. Coalesce
+                // them aggressively to avoid continuous tree traversal.
+                scheduleRefresh(if (chatActive) 280L else 180L)
             }
         }
     }
@@ -81,7 +104,9 @@ class WhatsAppReaderService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        main.removeCallbacks(warmConversationRunnable)
         NeuralSpeech.stop()
+        NeuralSpeech.leaveConversation()
         clearTargets()
         removeHighlight(immediate = true)
         super.onDestroy()
@@ -108,12 +133,26 @@ class WhatsAppReaderService : AccessibilityService() {
             val pkg = root.packageName?.toString().orEmpty()
 
             if (pkg !in whatsappPackages) {
-                clearTargets()
-                removeHighlight(immediate = true)
+                deactivateConversation()
                 return
             }
 
             val metrics = resources.displayMetrics
+
+            val isConversation = ConversationDetector.isOpenConversation(
+                root = root,
+                screenWidth = metrics.widthPixels,
+                screenHeight = metrics.heightPixels,
+                density = metrics.density
+            )
+
+            if (!isConversation) {
+                deactivateConversation()
+                return
+            }
+
+            activateConversation()
+
             val messages = MessageExtractor.visibleMessages(
                 root = root,
                 screenWidth = metrics.widthPixels,
@@ -131,6 +170,60 @@ class WhatsAppReaderService : AccessibilityService() {
             }
 
             repositionActiveHighlight(messages)
+        } finally {
+            try {
+                root.recycle()
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    private fun activateConversation() {
+        if (chatActive) return
+
+        chatActive = true
+        main.removeCallbacks(warmConversationRunnable)
+
+        // Wait a moment after entering the chat so navigation stays smooth,
+        // then load the model in the background before the first likely tap.
+        main.postDelayed(
+            warmConversationRunnable,
+            420L
+        )
+    }
+
+    private fun deactivateConversation() {
+        if (!chatActive && targets.isEmpty()) return
+
+        chatActive = false
+        main.removeCallbacks(warmConversationRunnable)
+
+        if (NeuralSpeech.isSpeaking()) {
+            stopReading(160L)
+        } else {
+            removeHighlight(immediate = true)
+        }
+
+        clearTargets()
+        NeuralSpeech.leaveConversation()
+    }
+
+    private fun isConversationStillOpen(): Boolean {
+        val root = rootInActiveWindow ?: return false
+
+        return try {
+            val pkg = root.packageName?.toString().orEmpty()
+            if (pkg !in whatsappPackages) {
+                false
+            } else {
+                val metrics = resources.displayMetrics
+                ConversationDetector.isOpenConversation(
+                    root = root,
+                    screenWidth = metrics.widthPixels,
+                    screenHeight = metrics.heightPixels,
+                    density = metrics.density
+                )
+            }
         } finally {
             try {
                 root.recycle()
@@ -295,6 +388,13 @@ class WhatsAppReaderService : AccessibilityService() {
     private fun onMessageTap(
         candidate: MessageExtractor.Candidate
     ) {
+        // A target may survive for a few milliseconds during navigation.
+        // Re-check before speaking so the home/contact list is never read.
+        if (!chatActive || !isConversationStillOpen()) {
+            deactivateConversation()
+            return
+        }
+
         val key = candidate.stableKey()
 
         if (
