@@ -167,9 +167,9 @@ class MainActivity : Activity() {
 
         setContentView(scroll)
 
-        // Prepare only the local model files in the background. No voice is
-        // generated here; this simply removes first-use file-copy latency.
-        NeuralSpeech.prepareModelFiles(this)
+        // v3.3 uses the neural model directly from APK assets.
+        // Remove only legacy copied models/cache left by older versions.
+        NeuralSpeech.prepareStorage(this)
     }
 
     override fun onResume() {
