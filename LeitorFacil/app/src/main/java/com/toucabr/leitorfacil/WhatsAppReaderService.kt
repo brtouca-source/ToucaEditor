@@ -46,19 +46,12 @@ class WhatsAppReaderService : AccessibilityService() {
 
     private val refreshPending = AtomicBoolean(false)
     private var chatActive = false
-
-    private val warmConversationRunnable = Runnable {
-        if (chatActive) {
-            NeuralSpeech.enterConversation(this)
-        }
-    }
+    private var whatsappForeground = false
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
-        // Keep the service lightweight. The neural model is loaded only after
-        // the user taps a message (or explicitly tests a voice in the app).
         scheduleRefresh(100L)
     }
 
@@ -67,17 +60,25 @@ class WhatsAppReaderService : AccessibilityService() {
 
         val pkg = event.packageName?.toString().orEmpty()
 
-        // Ignore noisy accessibility traffic from every other app. We only
-        // perform a delayed state check when a different app becomes active,
-        // which keeps WhatsApp scrolling/input fluid.
         if (pkg !in whatsappPackages) {
             if (
                 event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
                 event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
             ) {
+                if (whatsappForeground) {
+                    whatsappForeground = false
+                    NeuralSpeech.leaveWhatsApp()
+                }
                 scheduleRefresh(180L)
             }
             return
+        }
+
+        if (!whatsappForeground) {
+            whatsappForeground = true
+            // Start loading/priming as soon as WhatsApp itself is opened.
+            // Reading targets are still created only inside an actual chat.
+            NeuralSpeech.enterWhatsApp(this)
         }
 
         when (event.eventType) {
@@ -104,9 +105,8 @@ class WhatsAppReaderService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        main.removeCallbacks(warmConversationRunnable)
         NeuralSpeech.stop()
-        NeuralSpeech.leaveConversation()
+        NeuralSpeech.leaveWhatsApp()
         clearTargets()
         removeHighlight(immediate = true)
         super.onDestroy()
@@ -133,8 +133,17 @@ class WhatsAppReaderService : AccessibilityService() {
             val pkg = root.packageName?.toString().orEmpty()
 
             if (pkg !in whatsappPackages) {
+                if (whatsappForeground) {
+                    whatsappForeground = false
+                    NeuralSpeech.leaveWhatsApp()
+                }
                 deactivateConversation()
                 return
+            }
+
+            if (!whatsappForeground) {
+                whatsappForeground = true
+                NeuralSpeech.enterWhatsApp(this)
             }
 
             val metrics = resources.displayMetrics
@@ -180,23 +189,13 @@ class WhatsAppReaderService : AccessibilityService() {
 
     private fun activateConversation() {
         if (chatActive) return
-
         chatActive = true
-        main.removeCallbacks(warmConversationRunnable)
-
-        // Wait a moment after entering the chat so navigation stays smooth,
-        // then load the model in the background before the first likely tap.
-        main.postDelayed(
-            warmConversationRunnable,
-            420L
-        )
     }
 
     private fun deactivateConversation() {
         if (!chatActive && targets.isEmpty()) return
 
         chatActive = false
-        main.removeCallbacks(warmConversationRunnable)
 
         if (NeuralSpeech.isSpeaking()) {
             stopReading(160L)
@@ -205,7 +204,8 @@ class WhatsAppReaderService : AccessibilityService() {
         }
 
         clearTargets()
-        NeuralSpeech.leaveConversation()
+        // Do not unload the neural engine here. The user may simply be on the
+        // WhatsApp conversation list and open another chat next.
     }
 
     private fun isConversationStillOpen(): Boolean {
