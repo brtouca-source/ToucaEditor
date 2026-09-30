@@ -11,8 +11,8 @@ android {
         applicationId = "com.toucabr.leitorfacil.stable"
         minSdk = 23
         targetSdk = 34
-        versionCode = 6
-        versionName = "3.2.1"
+        versionCode = 7
+        versionName = "3.3"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
