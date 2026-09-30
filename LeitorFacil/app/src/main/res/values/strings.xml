@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Leitor Fácil</string>
+    <string name="accessibility_description">Lê somente mensagens de texto do WhatsApp quando a pessoa toca no texto. Não lê notificações, arquivos, fotos, áudios ou vídeos. A voz é gerada offline no aparelho.</string>
+    <string name="accessibility_summary">Tocar em texto do WhatsApp para ouvir</string>
+</resources>
