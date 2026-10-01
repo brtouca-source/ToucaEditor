@@ -1,7 +1,7 @@
 'use strict';
 (()=>{
  const Android=window.ToucaAndroid||(window.ToucaAndroid={}),native=window.toucaNative,$=id=>document.getElementById(id);
- const memory=Number(navigator.deviceMemory||4);
+ const memory=Number(navigator.deviceMemory||2);
  let installed=false,recorderState=null;
  const engine={activeFps:30};
  const hasAudio=()=>P.clips.some(c=>['audio','video'].includes(c.type)&&!c.muted&&(c.volume??100)>0);
@@ -55,6 +55,7 @@
  }
  function install(){
    if(installed)return;installed=true;
+   if(memory<=3){const high=$('exportQuality')?.querySelector('option[value="1080"]');if(high){high.disabled=true;high.textContent='1080p · indisponível no perfil de 3 GB';}$('exportQuality').value='720'}
    const fastStart=startRecord,fastFinish=finishRecord;
    startRecord=async function(...args){
      if(exporting)return;
@@ -67,7 +68,7 @@
      }catch(err){await native?.setKeepAwake?.(false);$('exportStatus').textContent=err.message||String(err);toast('Falha ao exportar: '+$('exportStatus').textContent)}
    };
    finishRecord=function(cancel=false){if(recorderState){recorderState.cancelled=!!cancel;pause();try{if(recorderState.rec.state!=='inactive')recorderState.rec.stop()}catch{}if(cancel)$('exportStatus').textContent='Cancelando e removendo o arquivo parcial…';return}const r=fastFinish(cancel);if(cancel)native?.setKeepAwake?.(false).catch(()=>{});return r};
-   showExport=async function(){if(!P.clips.length||!total())return toast('Sua timeline está vazia.');$('exportDialog').showModal();$('startExport').disabled=true;$('exportInfo').textContent='Verificando codecs e armazenamento deste aparelho…';const p=await probe(),mode=p.mp4?'MP4 em streaming':p.video&&p.audio?'MP4 por WebCodecs':p.webm?'WebM em streaming':'sem encoder compatível';$('exportInfo').textContent=`${fmt(total())} · ${mode} · gravação direta em Filmes/ToucaEditor${p.binaryBridge?' · ponte binária ativa':''}.`;$('startExport').disabled=!p.can};
+   showExport=async function(){if(!P.clips.length||!total())return toast('Sua timeline está vazia.');$('exportDialog').showModal();$('startExport').disabled=true;$('exportInfo').textContent='Verificando codecs e armazenamento deste aparelho…';const p=await probe(),mode=p.mp4?'MP4 em streaming':p.video&&p.audio?'MP4 por WebCodecs':p.webm?'WebM em streaming':'sem encoder compatível';$('exportInfo').textContent=`${fmt(total())} · ${mode} · ${memory<=3?'720p/30 fps ajustados para este aparelho':'qualidade selecionada'} · gravação direta em Filmes/ToucaEditor${p.binaryBridge?' · ponte binária ativa':''}.`;$('startExport').disabled=!p.can};
    $('exportBtn').onclick=showExport;$('startExport').onclick=startRecord;$('cancelExport').onclick=()=>exporting?finishRecord(true):$('exportDialog').close();window.__toucaAndroidExportProbe=probe;
  }
  Object.assign(engine,{install,probe});Android.exportEngine=engine;

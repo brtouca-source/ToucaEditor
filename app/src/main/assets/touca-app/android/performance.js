@@ -3,9 +3,10 @@
  const Android=window.ToucaAndroid||(window.ToucaAndroid={});
  const $=id=>document.getElementById(id),browserPerf=window.performance;
  let installed=false,lastPaint=0,lastAdapt=0,samples=[],zoomRaf=0;
- const memory=Number(navigator.deviceMemory||4);
+ // Android WebView may omit navigator.deviceMemory. Use the Redmi A5's low-memory profile.
+ const memory=Number(navigator.deviceMemory||2);
  const previewLevels=memory<=3?[480,600,720]:memory<=6?[540,720,900]:[720,900,1080];
- let previewIndex=1;
+ let previewIndex=memory<=3?0:1;
 
  function releaseElement(record){
    try{record?.source?.disconnect?.()}catch{}
@@ -40,7 +41,7 @@
    const baseRender=renderUI,baseLoad=loadAsset,baseRestore=restoreProject;
 
    renderUI=function(full=true){const r=baseRender(full);resizePreview();return r};
-   loadAsset=async function(asset){const r=await baseLoad(asset);const record=cache.get(asset.id);if(record?.el&&asset.type!=='image')record.el.preload='metadata';return r};
+   loadAsset=async function(asset){return baseLoad(asset)};
    restoreProject=async function(obj,...rest){
      const incoming=new Set((obj?.assets||[]).map(a=>a.id));releaseUnusedMedia(incoming);
      const r=await baseRestore(obj,...rest);releaseUnusedMedia();resizePreview(true);return r;
