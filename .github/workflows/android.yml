@@ -67,6 +67,37 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk | tee app/build/outputs/apk/debug/app-debug.apk.cert.txt
           sha256sum app/build/outputs/apk/debug/app-debug.apk | tee app/build/outputs/apk/debug/app-debug.apk.sha256
 
+      - name: Split APK for transfer
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          apk = Path("app/build/outputs/apk/debug/app-debug.apk").read_bytes()
+          chunk_size = 12 * 1024 * 1024
+          if len(apk) > 4 * chunk_size:
+              raise SystemExit(f"APK too large for transfer chunks: {len(apk)} bytes")
+          out = Path("/tmp/touca-apk-parts")
+          out.mkdir(parents=True, exist_ok=True)
+          for i in range(4):
+              (out / f"part-{i+1:02}.bin").write_bytes(apk[i*chunk_size:(i+1)*chunk_size])
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ToucaEditor-APK-part-01
+          path: /tmp/touca-apk-parts/part-01.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ToucaEditor-APK-part-02
+          path: /tmp/touca-apk-parts/part-02.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ToucaEditor-APK-part-03
+          path: /tmp/touca-apk-parts/part-03.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ToucaEditor-APK-part-04
+          path: /tmp/touca-apk-parts/part-04.bin
+
       - uses: actions/upload-artifact@v4
         with:
           name: ToucaEditor-31.6-Android-testing
